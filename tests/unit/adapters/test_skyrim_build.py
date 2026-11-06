@@ -28,7 +28,7 @@ def test_package_preserves_both_targets_and_never_invents_live_verification(tmp_
         assert set(manifest['runtime_verification'].values())=={'not_live_verified'}
         assert z.read('SKSE/Plugins/AnimaConnector.dll')==dll.read_bytes()
         assert z.read('SKSE/Plugins/AnimaConsole.exe')==console.read_bytes()
-        assert manifest['console_exe_sha256']==hashlib.sha256(console.read_bytes()).hexdigest() and manifest['plugin_version']=='0.5.3'
+        assert manifest['console_exe_sha256']==hashlib.sha256(console.read_bytes()).hexdigest() and manifest['plugin_version']=='0.5.4'
         assert 'AnimaConnector/source/native/anima.ico' in z.namelist()
         assert z.read('Anima.esp')==b.build_esp() and z.read('Scripts/AnimaStartDialogue.pex')==b'pex'
         assert 'AnimaConnector/source/native/runtime_support.h' in z.namelist()

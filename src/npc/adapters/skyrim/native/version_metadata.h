@@ -6,7 +6,7 @@ namespace anima {
 constexpr SKSE::PluginVersionData VersionMetadata()
 {
     SKSE::PluginVersionData data;
-    data.PluginVersion({0,5,3,0});
+    data.PluginVersion({0,5,4,0});
     data.PluginName("AnimaConnector"); data.AuthorName("Anima project");
     // Exact versions, not generic version independence. The post-629 bit is
     // unknown to the original 1.6.318 loader. Do not falsely claim NoStructUse.

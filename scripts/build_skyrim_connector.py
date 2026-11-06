@@ -72,7 +72,7 @@ def package(dll: Path, pins, console: Path, scripts=()):
     output = ROOT / "output/skyrim-mod"
     output.mkdir(parents=True, exist_ok=True)
     path = output / "AnimaConnector.zip"
-    manifest = {"plugin_version": "0.5.3", "target_runtimes": list(SUPPORTED_RUNTIMES),
+    manifest = {"plugin_version": "0.5.4", "target_runtimes": list(SUPPORTED_RUNTIMES),
                 "dll_sha256": hashlib.sha256(dll.read_bytes()).hexdigest(),
                 "console_exe_sha256": hashlib.sha256(console.read_bytes()).hexdigest(), "dependencies": pins,
                 "live_game_verified": False,

@@ -1,7 +1,8 @@
-"""Install the built connector into Skyrim's Data folder, keeping a backup. Run with the game closed.
+"""Install the built connector into Skyrim's Data folder, keeping a backup you can revert to. Run with the game closed.
 
 Copies the plugin, Anima.esp and scripts from output/skyrim-mod/AnimaConnector.zip, writes
-AnimaConsole.ini, and merges new INI settings without losing existing ones.
+AnimaConsole.ini, and merges new INI settings without losing existing ones. Every install saves
+what it replaced, and what it added, so scripts/revert_skyrim_connector.py can undo it exactly.
 
     python scripts/install_skyrim_connector.py --game-dir "D:/steam/steamapps/common/Skyrim Special Edition"
     python scripts/install_skyrim_connector.py --game-dir ... --no-console
@@ -12,6 +13,7 @@ from __future__ import annotations
 import argparse
 import configparser
 import io
+import json
 import shutil
 import subprocess
 import time
@@ -21,8 +23,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "output/skyrim-mod/AnimaConnector.zip"
 CONSOLE_EXE = ROOT / "output/skyrim-mod/AnimaConsole.exe"
+BACKUPS = ROOT / "output/skyrim-mod/backups"
 COPIED = ("SKSE/Plugins/AnimaConnector.dll", "Anima.esp", "Scripts/AnimaNative.pex", "Scripts/AnimaStartDialogue.pex")
 INI = "SKSE/Plugins/AnimaConnector.ini"
+MANIFEST = "manifest.json"
 
 
 def game_running(process: str = "SkyrimSE.exe") -> bool:
@@ -53,6 +57,30 @@ def merge_ini(installed: str, packaged: str, console_exe: Path | None) -> str:
     return buffer.getvalue()
 
 
+def unique_folder(root: Path, prefix: str) -> Path:
+    """A folder name that is never reused, so one save can never overwrite another."""
+    base = root / time.strftime(f"{prefix}-%Y%m%d-%H%M%S")
+    folder, number = base, 1
+    while folder.exists():
+        number += 1
+        folder = base.with_name(f"{base.name}-{number}")
+    return folder
+
+
+def snapshot(data: Path, names, backup: Path, reason: str, *, dry_run: bool = False) -> dict:
+    """Copy the current files to `backup` and record which did not exist, so a revert can remove them."""
+    saved = [name for name in names if (data / name).is_file()]
+    added = [name for name in names if not (data / name).exists()]
+    manifest = {"created": time.strftime("%Y-%m-%d %H:%M:%S"), "reason": reason, "backed_up": saved, "added": added}
+    if not dry_run:
+        for name in saved:
+            (backup / name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(data / name, backup / name)
+        backup.mkdir(parents=True, exist_ok=True)
+        (backup / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest
+
+
 def install(game_dir: Path, *, package: Path = PACKAGE, console_exe: Path | None = CONSOLE_EXE, backup_root: Path | None = None, dry_run: bool = False) -> list[str]:
     data = game_dir / "Data"
     if not data.is_dir():
@@ -62,19 +90,15 @@ def install(game_dir: Path, *, package: Path = PACKAGE, console_exe: Path | None
     if console_exe is not None and not console_exe.is_file():
         raise ValueError(f"{console_exe} not found; build first or pass --no-console")
     actions = []
-    backup = (backup_root or package.parent / "backups") / time.strftime("pre-install-%Y%m%d-%H%M%S")
+    backup = unique_folder(backup_root or BACKUPS, "pre-install")
     with zipfile.ZipFile(package) as archive:
         names = set(archive.namelist())
         missing = [name for name in (*COPIED, INI) if name not in names]
         if missing:
             raise ValueError(f"Package lacks {missing}")
-        for name in (*COPIED, INI):
-            target = data / name
-            if target.exists():
-                actions.append(f"back up {target}")
-                if not dry_run:
-                    (backup / name).parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(target, backup / name)
+        manifest = snapshot(data, (*COPIED, INI), backup, "install", dry_run=dry_run)
+        actions += [f"back up {data / name}" for name in manifest["backed_up"]]
+        actions += [f"(new file, revert will remove it) {data / name}" for name in manifest["added"]]
         for name in COPIED:
             actions.append(f"install {data / name}")
             if not dry_run:
@@ -86,6 +110,8 @@ def install(game_dir: Path, *, package: Path = PACKAGE, console_exe: Path | None
         actions.append(f"merge {ini_path}")
         if not dry_run:
             ini_path.write_text(merged, encoding="utf-8")
+    if not dry_run:
+        actions.append(f"saved a revert point: {backup}")
     return actions
 
 
@@ -107,6 +133,7 @@ def main() -> None:
     except ValueError as error:
         parser.exit(1, f"{error}\n")
     print("Done. In Mod Organizer, tick Anima.esp in the right-hand Plugins list, then start the game.")
+    print("To go back: python scripts/revert_skyrim_connector.py --game-dir <same folder> --list")
 
 
 if __name__ == "__main__":
