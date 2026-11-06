@@ -4,6 +4,7 @@
 #include "launch_policy.h"
 #include "direct_session.h"
 #include "conversation_request.h"
+#include "activation_policy.h"
 #include "audio_state.h"
 #include "version_metadata.h"
 #include <chrono>
@@ -129,13 +130,33 @@ int main()
         check(DecideChatKey(true,true,false,false,true)==ChatKeyAction::open_text,"existing session opens the text box");
         check(DecideChatKey(true,false,true,false,true)==ChatKeyAction::ignore && DecideChatKey(false,false,false,false,true)==ChatKeyAction::ignore,"custom menu or key-up ignored");
     }
+    {
+        using namespace anima;
+        check(TrackActivation(true,true,true,false,false,true),"valid player activation of an actor is tracked");
+        check(!TrackActivation(false,true,true,false,false,true),"disabled setting ignores activation");
+        check(!TrackActivation(true,false,true,false,false,true),"activation by a non-player is ignored");
+        check(!TrackActivation(true,true,false,false,false,true),"activating a door or item is ignored");
+        check(!TrackActivation(true,true,true,true,false,true),"never fires for the player");
+        check(!TrackActivation(true,true,true,false,true,true),"actor already in a session is ignored");
+        check(!TrackActivation(true,true,true,false,false,false),"dead, hostile, combat or far actor is ignored");
+        check(DecideActivation(0,false,false,false,true)==ActivationAction::wait && DecideActivation(699,false,false,false,true)==ActivationAction::wait,"waits 700 ms for a dialogue menu");
+        check(DecideActivation(700,false,false,false,true)==ActivationAction::start,"starts when no menu opened in time");
+        check(DecideActivation(300,true,false,false,true)==ActivationAction::cancel && DecideActivation(900,true,false,false,true)==ActivationAction::cancel,"a dialogue menu cancels the start");
+        check(DecideActivation(900,false,true,false,true)==ActivationAction::cancel,"an existing session cancels the start");
+        check(DecideActivation(900,false,false,false,false)==ActivationAction::cancel && DecideActivation(100,false,false,false,false)==ActivationAction::cancel,"actor that became invalid cancels the start");
+        check(DecideActivation(900,false,false,true,true)==ActivationAction::wait && DecideActivation(3000,false,false,true,true)==ActivationAction::wait,"a pause or custom menu defers the start");
+        check(DecideActivation(3001,false,false,true,true)==ActivationAction::cancel,"a long block gives up");
+        check(std::string(ActivationReason(true,false,true))=="dialogue_menu_opened" && std::string(ActivationReason(false,true,true))=="session_active"
+              && std::string(ActivationReason(false,false,false))=="invalid_target" && std::string(ActivationReason(false,false,true))=="timeout","cancel reasons are named");
+        check(std::string(ChatKeyName(ChatKeyAction::start_direct))=="start_direct" && std::string(ChatKeyName(ChatKeyAction::open_text))=="open_text_box","chat key outcomes are named for the log");
+    }
     check(anima::SayTopicLocalId(1)==0x804 && anima::SayTopicLocalId(2)==0x806 && anima::SayTopicLocalId(0)==0 && anima::SayTopicLocalId(3)==0 && anima::SayTopicLocalId(-1)==0,"say topics map to Anima.esp locals");
     check(anima::DecideSayProof(false,0)==anima::SayProof::waiting && anima::DecideSayProof(false,1999)==anima::SayProof::waiting,"say waits for proof of speech");
     check(anima::DecideSayProof(true,50)==anima::SayProof::started,"say starts only once the actor is speaking");
     check(anima::DecideSayProof(false,2000)==anima::SayProof::failed && anima::DecideSayProof(true,5000)==anima::SayProof::started,"say with no speech after 2 s fails");
     check(!anima::MayStopCurrentDialogue(true) && anima::MayStopCurrentDialogue(false),"an opening never stops the NPC's current dialogue");
     constexpr auto metadata=anima::VersionMetadata();
-    check(metadata.pluginVersion==REL::Version{0,5,3,0}.pack(),"plugin version is 0.5.3");
+    check(metadata.pluginVersion==REL::Version{0,5,4,0}.pack(),"plugin version is 0.5.4");
     check(metadata.versionIndependence==0,"legacy loader must not see unknown post-629 flags");
     check(metadata.versionIndependenceEx==SKSE::PluginVersionData::kVersionIndependentEx_AddressLibraryV5,"V5 flag without false NoStructUse claim");
     check(metadata.compatibleVersions[0]==REL::Version{1,6,318,0}.pack(),"legacy export target");

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 set(CMAKE_NINJA_CMCLDEPS_RC OFF)
-project(AnimaConnector VERSION 0.5.3 LANGUAGES CXX)
+project(AnimaConnector VERSION 0.5.4 LANGUAGES CXX)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "AnimaConnector requires Windows x64")
 endif()
