@@ -27,6 +27,7 @@
 #include "direct_session.h"
 #include "conversation_request.h"
 #include "activation_policy.h"
+#include "caption_text.h"
 
 using json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
@@ -105,24 +106,35 @@ class Connector final : public RE::BSTEventSink<RE::MenuOpenCloseEvent>, public 
 public:
     static Connector& Get() { static auto* instance = new Connector; return *instance; }
     void OnConversationLine() { RequestConversation(); }
+    // Diagnostic only: is the Start Game Enabled quest behind the "Talk with me." line running? A line of a quest that
+    // is not running is never shown. Anima.esp quest local ID 0x800 (see scripts/build_anima_esp.py).
+    void LogQuestState(const char* when)
+    {
+        auto data = RE::TESDataHandler::GetSingleton();
+        auto quest = data ? data->LookupForm<RE::TESQuest>(0x800, "Anima.esp") : nullptr;
+        if (!quest) { SKSE::log::warn("ANIMA quest check ({}): AnimaDialogue not found (is Anima.esp enabled?)", when); return; }
+        SKSE::log::info("ANIMA quest check ({}): AnimaDialogue form={:08X} enabled={} running={}", when, quest->GetFormID(), quest->IsEnabled(), quest->IsRunning());
+    }
     void Initialize()
     {
         auto path = std::filesystem::absolute("Data/SKSE/Plugins/AnimaConnector.ini").wstring();
         port = static_cast<INTERNET_PORT>(GetPrivateProfileIntW(L"Connection", L"Port", 8768, path.c_str()));
         pttKey = GetPrivateProfileIntW(L"Connection", L"PushToTalkKey", 66, path.c_str());
         menuKey = GetPrivateProfileIntW(L"Connection", L"ConversationMenuKey", 65, path.c_str());
-        chatKey = GetPrivateProfileIntW(L"Connection", L"ChatKey", 64, path.c_str());
+        chatKey = GetPrivateProfileIntW(L"Connection", L"ChatKey", 35, path.c_str());
         SKSE::GetModCallbackEventSource()->AddEventSink(this);
         animateMouth = GetPrivateProfileIntW(L"Connection", L"AnimateMouth", 1, path.c_str()) != 0;
         suppressVanilla = GetPrivateProfileIntW(L"Connection", L"SuppressVanillaSpeech", 1, path.c_str()) != 0;
         autoStart = GetPrivateProfileIntW(L"Connection", L"AutoStartOnActivate", 1, path.c_str()) != 0;  // missing key -> default 1
+        captionFallback = GetPrivateProfileIntW(L"Connection", L"CaptionFallback", 0, path.c_str()) != 0;  // missing key -> default 0
+        engineSubtitle = GetPrivateProfileIntW(L"Connection", L"EngineSubtitle", 1, path.c_str()) != 0;  // missing key -> default 1
         ResetEpoch();
         StartConsole(path);
         RE::UI::GetSingleton()->AddEventSink<RE::MenuOpenCloseEvent>(this);
         if (auto input = RE::BSInputDeviceManager::GetSingleton()) input->AddEventSink(this);
         if (auto holder = RE::ScriptEventSourceHolder::GetSingleton()) holder->AddEventSink<RE::TESActivateEvent>(this);
         std::thread([this] { Worker(); }).detach();
-        SKSE::log::info("AnimaConnector initialized on port {}; SuppressVanillaSpeech={} AutoStartOnActivate={}", port, suppressVanilla, autoStart);
+        SKSE::log::info("AnimaConnector initialized on port {}; SuppressVanillaSpeech={} AutoStartOnActivate={} EngineSubtitle={} CaptionFallback={} ChatKey={}", port, suppressVanilla, autoStart, engineSubtitle, captionFallback, chatKey);
         // Diagnostics only, no dependency: other dialogue mods hooking subtitles/audio may explain odd playback.
         for (const char* module : {"MantellaDialogue.dll", "MantellaSubtitles.dll", "SKSE_HTTP.dll"})
             SKSE::log::info("ANIMA other dialogue module {}: {}", module, GetModuleHandleA(module) ? "loaded" : "not loaded");
@@ -196,6 +208,7 @@ public:
         for (auto event = *events; event; event = event->next) {
             auto button = event->AsButtonEvent();
             if (!button || event->GetDevice() != RE::INPUT_DEVICE::kKeyboard) continue;
+            if (button->IsDown() && !session.empty()) lastActivity = Clock::now();  // any key press restarts the idle timer
             if (button->idCode == chatKey) {
                 const bool down = button->IsDown();
                 const auto info = down ? Inspect() : TargetInfo{};
@@ -206,7 +219,7 @@ public:
                 switch (action) {
                 case anima::ChatKeyAction::open_text: OpenUi(anima::Panel::text); break;
                 case anima::ChatKeyAction::start_direct:
-                    if (info.actor && StartDirect(info.actor)) OpenUi(anima::Panel::text);
+                    if (info.actor && StartDirect(info.actor) && anima::OpensTextBoxOnStart(anima::StartSource::chat_key)) OpenUi(anima::Panel::text);
                     break;
                 case anima::ChatKeyAction::no_npc: Notify("ANIMA: talk to an NPC first."); break;
                 default: break;
@@ -282,7 +295,7 @@ private:
     std::unordered_set<std::string> seen;
     std::uint64_t serial = 0, sequence = 0, snapshotSequence = 0;
     INTERNET_PORT port = 8768;
-    std::uint32_t pttKey = 66, menuKey = 65, chatKey = 64;
+    std::uint32_t pttKey = 66, menuKey = 65, chatKey = 35;
     bool direct = false, requestPending = false, autoStart = true, activationPending = false, activationMenuSeen = false;
     RE::ActorHandle activationActor;
     Clock::time_point activationAt;
@@ -292,11 +305,17 @@ private:
     Clock::time_point lastActivity;
     bool open = false, listening = false, animateMouth = true, audioStarted = false, endAfter = false, mouthOwned = false;
     float originalMouth = 0;
+    bool captionFallback = false, engineSubtitle = true;
+    int captionReadds = 0;
+    Clock::time_point captionCheckAt;
     std::vector<float> mouth;
     Clock::time_point openedAt, lastCapture, playbackStart, playbackEnd;
 
+    // Top-left notices are off: only real problems reach the screen. Captions use the bottom subtitle line.
     void Notify(const char* text)
     {
+        const std::string_view t(text ? text : "");
+        if (t.find("unavailable") == std::string_view::npos && t.find("talk to an NPC first") == std::string_view::npos) return;
         auto vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
         RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
         if (vm) vm->DispatchStaticCall("Debug", "Notification", RE::MakeFunctionArguments(RE::BSFixedString(text)), callback);
@@ -383,7 +402,10 @@ private:
             return;
         }
         SKSE::log::info("ANIMA activate: no dialogue menu within {} ms for '{}' form={:08X}; starting direct session", age, info.name, info.id);
-        if (StartDirect(actor.get())) OpenUi(anima::Panel::text);
+        if (StartDirect(actor.get())) {
+            if (anima::OpensTextBoxOnStart(anima::StartSource::activation)) OpenUi(anima::Panel::text);
+            else Notify(anima::ActivationHint(chatKey, pttKey, menuKey).c_str());  // shown once per started session; the box waits for the key
+        }
     }
     // Called on the game thread from the Papyrus fragment of the Anima.esp "Talk with me." line.
     void RequestConversation()
@@ -406,7 +428,7 @@ private:
         switch (action) {
         case anima::OpenRequestAction::start_direct:
             requestPending = false;
-            if (StartDirect(actor.get())) OpenUi(anima::Panel::text);
+            if (StartDirect(actor.get()) && anima::OpensTextBoxOnStart(anima::StartSource::talk_line)) OpenUi(anima::Panel::text);
             break;
         case anima::OpenRequestAction::open_text: requestPending = false; OpenUi(anima::Panel::text); break;
         case anima::OpenRequestAction::expire:
@@ -416,10 +438,38 @@ private:
             break;
         }
     }
+    // Like Mantella's conversation, the NPC stops walking and faces the player while we talk; End() lets go.
+    RE::ActorHandle held;
+    void Hold(RE::Actor* actor)
+    {
+        auto vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        auto policy = vm ? vm->GetObjectHandlePolicy() : nullptr;
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (!vm || !policy || !actor || !player || actor->IsPlayerRef()) return;
+        const auto handle = policy->GetHandleForObject(actor->GetFormType(), actor);
+        if (!handle) return;
+        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
+        vm->DispatchMethodCall(handle, "Actor", "SetDontMove", RE::MakeFunctionArguments(true), cb);
+        vm->DispatchMethodCall(handle, "Actor", "SetLookAt", RE::MakeFunctionArguments(static_cast<RE::TESObjectREFR*>(player), false), cb);
+        held = actor->GetHandle();
+    }
+    void Unhold()
+    {
+        auto actor = held.get(); held = {};
+        auto vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        auto policy = vm ? vm->GetObjectHandlePolicy() : nullptr;
+        if (!actor || !vm || !policy) return;
+        const auto handle = policy->GetHandleForObject(actor->GetFormType(), actor.get());
+        if (!handle) return;
+        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
+        vm->DispatchMethodCall(handle, "Actor", "SetDontMove", RE::MakeFunctionArguments(false), cb);
+        vm->DispatchMethodCall(handle, "Actor", "ClearLookAt", RE::MakeFunctionArguments(), cb);
+    }
     void BeginSession(RE::Actor* actor, Clock::time_point now, bool directStart = false)
     {
         End(true, "state_changed"); session = std::format("{}-{}", epoch, ++serial); sequence = 0;
         speaker = actor->GetHandle();
+        Hold(actor);
         snapshotSequence = 1;
         auto data = Snapshot(actor); auto event = Event("start");
         event["direct"] = directStart;  // Anima started this session: the bridge may open it with a greeting
@@ -532,10 +582,8 @@ private:
                     SKSE::log::info("ANIMA UIExtensions text load callback received");
                 } else if (name == "UITextEntryMenu_TextChanged") {
                     if (uiState.CanSubmit(session, text) && BargeIn()) { Notify("ANIMA: sending your message..."); auto event = Event("player_text"); event["text"] = text; Queue(std::move(event)); }
-                    else if (direct) { End(true, "nothing_typed"); break; }
-                    CancelUi();
+                    CancelUi();  // the session stays open; the box reopens only on the next key press
                 } else if (name == "UITextEntryMenu_CloseMenu") {
-                    if (direct) { End(true, "nothing_typed"); break; }
                     CancelUi();
                 }
             }
@@ -673,6 +721,7 @@ private:
         if (delivery.empty()) return;
         auto actor = speaker.get();
         if (actor && !sayActive && !openingDelivery && Active() && !session.empty()) SuppressVanillaSpeech(actor.get(), now);  // the engine's own Say line is not vanilla speech
+        if (actor) KeepSubtitle(actor.get(), now);
         if (!actor || !Active() || actor->IsInCombat() || actor->IsDead())
             Stop(!actor ? "actor_lost" : !Active() ? "menu_closed" : "combat", "interrupted");
         else if (sayPending) {
@@ -765,15 +814,81 @@ private:
         SKSE::log::info("ANIMA say: topic {} dispatched for actor={:08X}", index, actor->GetFormID());
         return true;
     }
+    // Caller holds manager->lock. total = all entries, theirs = this speaker's entries, ours = our text for this speaker.
+    struct SubtitleCounts { std::size_t total = 0, theirs = 0, ours = 0; };
+    SubtitleCounts CountSubtitles(RE::SubtitleManager* manager, RE::ObjectRefHandle handle) const
+    {
+        SubtitleCounts counts;
+        for (const auto& info : manager->subtitles) {
+            ++counts.total;
+            if (info.speaker == handle) { ++counts.theirs; if (!subtitleText.empty() && subtitleText == info.subtitle.c_str()) ++counts.ours; }
+        }
+        return counts;
+    }
+    // Resets the engine's subtitle state and removes every entry of this speaker (a stale entry or a stale
+    // currentSpeaker makes the engine ignore new entries). KillSubtitles takes the manager lock itself, so it runs
+    // before ours is taken. Returns the number of removed entries.
+    std::size_t ClearSubtitles(RE::SubtitleManager* manager, RE::ObjectRefHandle handle)
+    {
+        manager->KillSubtitles();
+        RE::BSSpinLockGuard lock(manager->lock);
+        std::size_t removed = 0;
+        for (auto it = manager->subtitles.begin(); it != manager->subtitles.end();) {
+            if (it->speaker == handle) { it = manager->subtitles.erase(it); ++removed; }
+            else ++it;
+        }
+        if (manager->currentSpeaker == handle || manager->subtitles.empty()) manager->currentSpeaker = RE::ObjectRefHandle{};
+        return removed;
+    }
+    // Clears stale state (see ClearSubtitles), then adds ours. Returns whether our entry is present afterwards.
+    bool PushSubtitle(RE::SubtitleManager* manager, RE::Actor* actor, const std::string& text, const char* why)
+    {
+        const auto handle = actor->GetHandle();
+        SubtitleCounts before;
+        bool speakerSetBefore = false;
+        { RE::BSSpinLockGuard lock(manager->lock); before = CountSubtitles(manager, handle); speakerSetBefore = manager->currentSpeaker.get() != nullptr; }
+        const auto removed = ClearSubtitles(manager, handle);
+        RE::BSSpinLockGuard lock(manager->lock);
+        RE::SubtitleInfo info{};
+        info.speaker = handle; info.subtitle = text.c_str(); info.targetDistance = 10000; info.forceDisplay = true;
+        manager->subtitles.push_back(info); subtitleText = text;
+        const auto after = CountSubtitles(manager, handle);
+        SKSE::log::info("ANIMA caption: {} mode=engine_subtitle before total={} speaker={} currentSpeakerSet={} killed=1 removed={} after total={} speaker={} ours={} currentSpeakerSet={}",
+                        why, before.total, before.theirs, speakerSetBefore, removed, after.total, after.theirs, after.ours, manager->currentSpeaker.get() != nullptr);
+        return after.ours > 0;
+    }
     void AddSubtitle(RE::Actor* actor, const std::string& text)
     {
         if (text.empty()) return;
-        if (auto manager = RE::SubtitleManager::GetSingleton()) {
-            RE::BSSpinLockGuard lock(manager->lock);
-            RE::SubtitleInfo info{};
-            info.speaker = actor->GetHandle(); info.subtitle = text.c_str(); info.targetDistance = 10000; info.forceDisplay = true;
-            manager->subtitles.push_back(info); subtitleText = text;
+        captionReadds = 0; captionCheckAt = Clock::now();
+        auto manager = RE::SubtitleManager::GetSingleton();
+        bool confirmed = false;
+        if (!manager) SKSE::log::warn("ANIMA caption: SubtitleManager unavailable");
+        else if (engineSubtitle) confirmed = PushSubtitle(manager, actor, text, "add");
+        else {
+            const auto removed = ClearSubtitles(manager, actor->GetHandle());
+            SKSE::log::info("ANIMA caption: add mode=message_only removed={}", removed);
         }
+        if (!anima::ShowCaptionMessage(engineSubtitle, captionFallback, manager != nullptr)) return;
+        const auto lines = anima::CaptionLines(Text(actor->GetName(), 64), text);
+        for (const auto& line : lines) Notify(line.c_str());
+        SKSE::log::info("ANIMA caption: on-screen message shown lines={} engine_entry_confirmed={}", lines.size(), confirmed);
+    }
+    // While a delivery is active, an engine that drops our entry gets it back (at most 3 times).
+    void KeepSubtitle(RE::Actor* actor, Clock::time_point now)
+    {
+        if (subtitleText.empty() || captionReadds >= 3 || now - captionCheckAt < std::chrono::milliseconds(250)) return;
+        captionCheckAt = now;
+        auto manager = RE::SubtitleManager::GetSingleton();
+        if (!manager) return;
+        {
+            RE::BSSpinLockGuard lock(manager->lock);
+            if (CountSubtitles(manager, actor->GetHandle()).ours > 0) return;
+        }
+        ++captionReadds;
+        const auto text = subtitleText;
+        SKSE::log::warn("ANIMA caption: entry dropped by engine at {} ms; re-adding ({}/3); delivery={}", ElapsedMs(now), captionReadds, delivery);
+        PushSubtitle(manager, actor, text, "readd");
     }
     void Apply(const json& command)
     {
@@ -793,11 +908,21 @@ private:
         const bool ready = actor && Active() && !actor->IsInCombat() && !actor->IsDead() && seen.size() < 128;
         auto manager = RE::MenuTopicManager::GetSingleton();
         const auto targetHandle = actor ? static_cast<RE::TESObjectREFR*>(actor.get())->GetHandle() : RE::ObjectRefHandle{};
+        // Menu sessions require the menu's selected speaker; direct sessions have no menu, so the actor's own speech decides.
+        const bool menuSession = open;
+        const bool actorSpeaking = !menuSession && actor && VanillaSpeaking(actor.get());
+        const auto expiresAt = command.value("expires_at_ms", 0LL);
+        const auto now = UtcMs();
         const auto decision = anima::EvaluateDialogue(
-            {requestSession, target, id, command.value("snapshot_sequence", 0ULL), command.value("expires_at_ms", 0LL), command.value("text", "").size()},
-            {session, expected, snapshotSequence, UtcMs(), ready, false, seen.contains(id)}, manager, targetHandle);
+            {requestSession, target, id, command.value("snapshot_sequence", 0ULL), expiresAt, command.value("text", "").size()},
+            {session, expected, snapshotSequence, now, ready, actorSpeaking, seen.contains(id)}, manager, targetHandle, menuSession);
         if (decision == anima::Decision::ignore || decision == anima::Decision::wait) return;
         if (decision == anima::Decision::reject) {
+            SKSE::log::warn("ANIMA delivery rejected: delivery={} mode={} actor={} target={} expected={} activeSession={} combat={} dead={} seen={} "
+                            "snapshot_seq={}/{} expires_in_ms={} text_bytes={}",
+                            id, menuSession ? "menu" : "direct", actor != nullptr, target, expected, Active(),
+                            actor && actor->IsInCombat(), actor && actor->IsDead(), seen.size(),
+                            command.value("snapshot_sequence", 0ULL), snapshotSequence, expiresAt - now, command.value("text", "").size());
             Ack(id, "failed"); seen.insert(id); return;
         }
         if (command.value("mode", "speech") == "silence") { seen.insert(id); Ack(id, "completed", "end", "none"); return; }
@@ -882,11 +1007,8 @@ private:
     {
         if (subtitleText.empty()) return;
         if (auto manager = RE::SubtitleManager::GetSingleton()) {
-            RE::BSSpinLockGuard lock(manager->lock);
-            for (auto it = manager->subtitles.begin(); it != manager->subtitles.end();) {
-                if (it->speaker == speaker && subtitleText == it->subtitle.c_str()) it = manager->subtitles.erase(it);
-                else ++it;
-            }
+            const auto removed = ClearSubtitles(manager, speaker);  // erase ours, reset currentSpeaker, KillSubtitles
+            SKSE::log::info("ANIMA caption: remove removed={} killed=1", removed);
         }
         subtitleText.clear();
     }
@@ -911,6 +1033,7 @@ private:
         CancelUi(); nextUi = -1;
         Stop(reason, "interrupted");
         if (notify && !session.empty()) Queue(Event("end"));
+        Unhold();
         session.clear(); seen.clear(); listening = false; direct = false;
         std::scoped_lock lock(mutex); workerSession.clear(); commands.clear();
     }
@@ -1023,10 +1146,11 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
     }
     SKSE::Init(skse);
     SKSE::GetPapyrusInterface()->Register(RegisterPapyrus);
-    SKSE::log::info("AnimaConnector 0.5.4 loading on Skyrim {}; Address Library format {}", version.string(),
+    SKSE::log::info("AnimaConnector 0.5.6 loading on Skyrim {}; Address Library format {}", version.string(),
                    anima::AddressLibraryFormat({version.major(),version.minor(),version.patch(),version.build()}));
     return SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) Connector::Get().Initialize();
+        else if (message->type == SKSE::MessagingInterface::kPostLoadGame) Connector::Get().LogQuestState("post_load_game");
         else if (message->type == SKSE::MessagingInterface::kPreLoadGame || message->type == SKSE::MessagingInterface::kNewGame) Connector::Get().ResetEpoch();
     });
 }

@@ -1,0 +1,29 @@
+\documentclass[border=4pt]{standalone}
+\input{diagram_styles.tex}
+\begin{document}
+\begin{tikzpicture}
+\node[storage,text width=3.3cm] (event) at (0,6.2) {Triggers: conversation start, material change, player turn};
+\node[block,text width=3.3cm] (capture) at (0,4.6) {Player-camera capture\\PrintWindow; on by default};
+\node[retrieval,text width=3.3cm] (bound) at (0,2.9) {Capped text reference\\Scene, people, objects, doubts};
+\node[engine,diamond,aspect=2.2,text width=1.95cm,inner sep=0pt] (fresh) at (0,.95) {Same session, revision; under 15 s?};
+\node[block,text width=3.3cm] (check) at (4.7,6.2) {Image validation, if CV on\\Size limits; blank frames rejected};
+\node[storage,optional,text width=3.3cm] (yolo) at (4.7,4.8) {Optional YOLO detector\\Disabled by default};
+\node[external,text width=3.3cm] (vlm) at (4.7,3.4) {Local VLM via Ollama\\qwen2.5vl:3b; 1280 px};
+\node[retrieval,text width=3.3cm] (schema) at (4.7,2) {SceneDescriptor v1.0\\Validated, lightly coerced};
+\node[context,text width=3.5cm] (prompt) at (4.7,.2) {Prompt data only\\Untrusted visual reference};
+\draw[flow] (event) -- (capture);
+\draw[control] (capture.east) -- ++(.3,0) |- (check.west);
+\draw[flow] (check) -- (yolo);
+\draw[flow] (yolo) -- (vlm);
+\draw[flow] (vlm) -- (schema);
+\draw[flow] (schema.west) -- ++(-.3,0) |- (bound.east);
+\draw[flow] (bound) -- (fresh);
+\draw[control] (fresh.east) -- ++(.3,0) |- (prompt.west);
+\begin{pgfonlayer}{background}
+\node[group,fit=(event)(capture)(bound)(fresh),label={[heading]above:CONNECTOR}] {};
+\node[group,fit=(check)(yolo)(vlm)(schema),label={[heading]above:CV SERVICE}] {};
+\node[group,fit=(prompt),label={[heading]below:CORE}] {};
+\end{pgfonlayer}
+\node[edgelabel,text width=7.9cm] at (2.35,-1.5) {Attachment is an explicit setting. Any failure or stale result leaves dialogue running without a reference. Beyond the prompt, this text reaches only the name check.};
+\end{tikzpicture}
+\end{document}

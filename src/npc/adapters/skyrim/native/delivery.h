@@ -30,10 +30,14 @@ inline Decision Evaluate(const Delivery& request, const Receiver& receiver)
 
 // Keep the engine-to-policy mapping here so native delivery and the offline
 // receiver tests exercise the same selected-speaker/active-line checks.
+// menuSession: a DialogueMenu session, where the menu's selected speaker must be this NPC and the menu's active
+// topic counts as vanilla speech. Direct (menu-less) sessions have no menu speaker: the caller supplies
+// receiver.vanillaTalking from the actor's own speech, and combat/death/expiry/speaker checks still apply.
 template <class TopicManager, class SpeakerHandle>
 Decision EvaluateDialogue(const Delivery& request, Receiver receiver,
-                          const TopicManager* manager, const SpeakerHandle& speaker)
+                          const TopicManager* manager, const SpeakerHandle& speaker, bool menuSession = true)
 {
+    if (!menuSession) return Evaluate(request, receiver);
     const bool currentSpeaker = manager && manager->IsCurrentSpeaker(speaker);
     receiver.actorReady = receiver.actorReady && currentSpeaker;
     receiver.vanillaTalking = currentSpeaker && manager->currentTopicInfo != nullptr;

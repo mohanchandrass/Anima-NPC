@@ -20,6 +20,7 @@ from .personas import load_rules
 from .windows import Microphone, capture_client
 from .diagnostics import event as log_event
 from npc.vision import CVSceneClient, CVFailure, VisualContext
+from .frame_stats import MOSTLY_BLACK, frame_stats
 from npc.state.social_store import SocialStore, StoreFailure
 from npc.behavior.moves import opening_plan
 from npc.contracts.context import Relationship, Scope, PlayerInput
@@ -160,6 +161,49 @@ class Bridge:
                   source=record.get("source", "text"), turn_type=record.get("turn_type", "none"), move=record.get("move", "none"),
                   total_ms=round((self.clock() - record["t0"]) * 1000, 1), **stages)
 
+    def persona_source(self, snapshot):
+        if self.profiles.get(snapshot.npc.base.definition_key):
+            return "authored"
+        return "derived" if self.rules else "default_unknown"
+
+    def _log_game_context(self, event):
+        """What the game told Anima about this NPC and place when the conversation opened."""
+        try:
+            data = event.snapshot
+            npc = data.npc
+            profile = profile_for(data, self.profiles, self.rules)
+            names = [f.name for f in npc.factions if f.name]
+            factions = ", ".join(names[:3]) + (f" (+{len(names) - 3} more)" if len(names) > 3 else "") if names else "none"
+            place = data.location.name if data.location and data.location.name else data.cell.name if data.cell and data.cell.name else "unknown"
+            log_event("GAME_CONTEXT", npc=npc.reference.name or npc.base.name or "unknown",
+                      race=npc.race.name if npc.race and npc.race.name else "unknown",
+                      voice_type=npc.voice.name if npc.voice and npc.voice.name else "unknown",
+                      factions=factions, location=place, interior=data.interior, hour=round(data.hour, 1),
+                      weather=data.weather_label or (data.weather.name if data.weather and data.weather.name else "unknown"),
+                      persona_source=self.persona_source(data), role=profile.persona.occupation,
+                      voice="chosen at the first reply, see TTS_READY")
+        except Exception:  # a log line must never break a conversation
+            log_event("GAME_CONTEXT", error="unavailable")
+
+    async def _log_screenshot(self, path):
+        """SCREENSHOT line with brightness statistics (standard library only; only called when capture is on)."""
+        def work():
+            raw = Path(path).read_bytes()
+            return len(raw), frame_stats(raw)
+        try:
+            size, stats = await asyncio.to_thread(work)
+        except OSError:
+            return
+        if stats is None or stats["black_fraction"] is None:
+            log_event("SCREENSHOT", saved=path, bytes=size, size=f"{stats['width']}x{stats['height']}" if stats else "unknown",
+                      stats="unavailable")
+            return
+        log_event("SCREENSHOT", saved=path, size=f"{stats['width']}x{stats['height']}",
+                  mean_brightness=stats["mean_brightness"], black_fraction=stats["black_fraction"])
+        if stats["black_fraction"] > MOSTLY_BLACK:
+            log_event("SCREENSHOT", warning="mostly_black",
+                      hint="Skyrim must run windowed or borderless; the GDI capture returns black for exclusive fullscreen and overlays")
+
     def current(self, session_id):
         if self.session is None or self.session.event.session_id != session_id:
             raise ConnectionError("unknown or ended session")
@@ -202,6 +246,7 @@ class Bridge:
             self.session = session
             log_event("SESSION_OPEN", session=event.session_id, npc=npc_id(event.snapshot),
                       name=event.snapshot.npc.base.name if event.snapshot.npc.base else "unknown")
+            self._log_game_context(event)
             session.context_task = self.spawn(self.publish_context(session, "context_ready"))
             if self.settings.opening_lines and event.direct:  # vanilla menu sessions already have the NPC's own greeting
                 session.opening_task = self.spawn(self.open_conversation(session))
@@ -497,15 +542,23 @@ class Bridge:
                 session.screenshot = {"path": path, "viewpoint": "player_camera", "status": "saved",
                                       "captured_at": datetime.now(timezone.utc).isoformat(),
                                       "npc_visibility": "unknown", "event_id": event.event_id}
+                await self._log_screenshot(path)
                 if self.cv_client:
                     session.visual_status = "analyzing"
+                    cv_began = time.monotonic()
                     try:
                         with Path(path).open("rb") as stream:
                             image = stream.read(10 * 1024 * 1024 + 1)
                         if len(image) > 10 * 1024 * 1024:
                             raise ValueError("CV image exceeds upload budget")
+                        log_event("CV_REQUEST", url=self.settings.cv_url, bytes=len(image), timeout_s=self.settings.cv_timeout_s)
                         async with asyncio.timeout(self.settings.cv_timeout_s):
                             visual = await self.cv_client.analyze(image, "image/png")
+                        log_event("CV_RESULT", environment=(visual.environment or "none")[:120], characters=len(visual.characters),
+                                  objects=len(visual.objects), uncertainties=len(visual.uncertainties),
+                                  model=visual.vlm_model or visual.detector_model or "unknown",
+                                  latency_ms=round((time.monotonic() - cv_began) * 1000),
+                                  status="fresh" if self.session is session and session.revision == revision else "stale_discarded")
                         if (self.session is session and session.revision == revision
                                 and 0 <= self.clock() - captured_time < self.settings.visual_ttl_s):
                             session.visual = visual.model_copy(update={
@@ -515,13 +568,44 @@ class Bridge:
                             session.visual_status = "ready"
                         else:
                             session.visual_status = "stale"
-                    except (CVFailure, TimeoutError, ValueError, OSError):
+                    except (CVFailure, TimeoutError, ValueError, OSError) as error:
+                        log_event("CV_UNAVAILABLE", reason=getattr(error, "code", None) or type(error).__name__,
+                                  latency_ms=round((time.monotonic() - cv_began) * 1000))
                         session.visual = None
                         session.visual_status = "unavailable"
-            except (OSError, ValueError):
+            except (OSError, ValueError) as error:
+                log_event("SCREENSHOT_FAILED", reason=str(error)[:120] or type(error).__name__)
                 session.screenshot = {"status": "unavailable", "viewpoint": "player_camera"}
                 session.visual = None
                 session.visual_status = "unavailable"
+
+    def _log_cv_context(self, session):
+        if self.cv_client is None:
+            return
+        if self.visual_reference(session) is None:
+            log_event("CV_CONTEXT", used="none", reason=f"no fresh descriptor ({session.visual_status})")
+        else:
+            log_event("CV_CONTEXT", used="attached_to_prompt" if self.settings.attach_visual_reference else "reference_only",
+                      ttl_s=self.settings.visual_ttl_s)
+
+    @staticmethod
+    def _log_preview(preview):
+        """Retrieval, validation, repair and fallback outcome of one turn (from the runner's TurnPreview)."""
+        knowledge = getattr(preview, "knowledge", None)
+        if knowledge is not None and getattr(preview, "model_calls", 0):
+            log_event("RETRIEVAL", status=knowledge.status, evidence=",".join(getattr(preview, "evidence_used", ())) or "none",
+                      omitted=getattr(preview, "evidence_omitted", 0))
+        violations = ",".join(getattr(preview, "violations", ())) or "none"
+        status = getattr(preview, "status", "unknown")
+        if status == "model_success":
+            log_event("VALIDATION", result="accepted", violations=violations)
+        elif status == "repair_success":
+            log_event("REPAIR", violations=violations, calls=preview.model_calls)
+            log_event("VALIDATION", result="accepted", violations=violations)
+        elif status == "error_fallback":
+            if getattr(preview, "model_calls", 0) and violations != "none":
+                log_event("VALIDATION", result="rejected", violations=violations)
+            log_event("FALLBACK", reason=getattr(preview, "error_code", None) or "unknown", calls=getattr(preview, "model_calls", 0))
 
     def visual_reference(self, session):
         if (self.session is session and session.visual is not None and session.visual_revision == session.revision
@@ -576,8 +660,11 @@ class Bridge:
         session.inputs[speech.input_id] = "pending"
         session.timings[speech.input_id] = {"t0": self.clock(), "source": speech.source,
                                             **({"stt_ms": stt_ms} if stt_ms is not None else {})}
+        spoken = speech.source == "stt"
         log_event("PLAYER_INPUT", session=speech.session_id, request=speech.input_id,
-                  npc=npc_id(session.event.snapshot), source=speech.source, text=speech.text)
+                  npc=npc_id(session.event.snapshot), source="speech" if spoken else "typed",
+                  confidence=round(speech.confidence, 2) if spoken else "n/a",
+                  transcript_ms=stt_ms if spoken and stt_ms is not None else "n/a", text=speech.text)
         if (self.cv_client and self.visual_reference(session) is None
                 and (not session.context_task or session.context_task.done())):
             session.context_task = self.spawn(self.publish_context(session, "context_updated"))
@@ -625,6 +712,10 @@ class Bridge:
                     if self.runner is None:
                         raise ConnectionError("preview runner not configured")
                     began = self.clock()
+                    self._log_cv_context(session)
+                    note = getattr(getattr(self.runner, "provider", None), "note", None)
+                    if callable(note):
+                        note(persona_source=self.persona_source(session.event.snapshot), npc=profile.persona.name)
                     try:
                         preview = await self.runner.run(
                             scenario, visual_context=self.visual_reference(session)
@@ -644,6 +735,7 @@ class Bridge:
                               model=getattr(preview, "model", None), calls=getattr(preview, "model_calls", 0),
                               repair_attempted=getattr(preview, "model_calls", 0) == 2, stage_ms=getattr(preview, "stage_ms", {}),
                               input_tokens=getattr(preview, "input_tokens", 0), output_tokens=getattr(preview, "output_tokens", 0))
+                    self._log_preview(preview)
                     if preview.response:
                         await self.result(PipelineResult(session_id=speech.session_id, request_id=speech.input_id,
                                                         npc_id=scenario.turn.npc_id, mode=preview.response.mode,

@@ -4,6 +4,8 @@
 #include "launch_policy.h"
 #include "direct_session.h"
 #include "conversation_request.h"
+#include "activation_policy.h"
+#include "caption_text.h"
 #include "audio_state.h"
 #include "version_metadata.h"
 #include <chrono>
@@ -119,7 +121,7 @@ int main()
         check(DecideDirectEnd(10,true,false,true,0)==DirectEnd::combat,"combat ends direct session");
         check(DecideDirectEnd(10,false,true,true,0)==DirectEnd::dead,"death ends direct session");
         check(DecideDirectEnd(10,false,false,false,0)==DirectEnd::cell_changed,"cell change ends direct session");
-        check(DecideDirectEnd(10,false,false,true,60000)==DirectEnd::none && DecideDirectEnd(10,false,false,true,60001)==DirectEnd::idle,"idle limit is 60 s");
+        check(DecideDirectEnd(10,false,false,true,120000)==DirectEnd::none && DecideDirectEnd(10,false,false,true,120001)==DirectEnd::idle && kDirectIdleMs==120000,"idle limit is 120 s");
         check(std::string(DirectEndName(DirectEnd::distance))=="too_far","end reasons are named");
         check(SessionActive(false,true) && SessionActive(true,false) && !SessionActive(false,false),"menu or direct session is active");
         check(PttStartsDirect(true,false,false,true) && !PttStartsDirect(true,false,false,false) && !PttStartsDirect(true,true,false,true)
@@ -129,13 +131,57 @@ int main()
         check(DecideChatKey(true,true,false,false,true)==ChatKeyAction::open_text,"existing session opens the text box");
         check(DecideChatKey(true,false,true,false,true)==ChatKeyAction::ignore && DecideChatKey(false,false,false,false,true)==ChatKeyAction::ignore,"custom menu or key-up ignored");
     }
+    {
+        using namespace anima;
+        check(TrackActivation(true,true,true,false,false,true),"valid player activation of an actor is tracked");
+        check(!TrackActivation(false,true,true,false,false,true),"disabled setting ignores activation");
+        check(!TrackActivation(true,false,true,false,false,true),"activation by a non-player is ignored");
+        check(!TrackActivation(true,true,false,false,false,true),"activating a door or item is ignored");
+        check(!TrackActivation(true,true,true,true,false,true),"never fires for the player");
+        check(!TrackActivation(true,true,true,false,true,true),"actor already in a session is ignored");
+        check(!TrackActivation(true,true,true,false,false,false),"dead, hostile, combat or far actor is ignored");
+        check(DecideActivation(0,false,false,false,true)==ActivationAction::wait && DecideActivation(699,false,false,false,true)==ActivationAction::wait,"waits 700 ms for a dialogue menu");
+        check(DecideActivation(700,false,false,false,true)==ActivationAction::start,"starts when no menu opened in time");
+        check(DecideActivation(300,true,false,false,true)==ActivationAction::cancel && DecideActivation(900,true,false,false,true)==ActivationAction::cancel,"a dialogue menu cancels the start");
+        check(DecideActivation(900,false,true,false,true)==ActivationAction::cancel,"an existing session cancels the start");
+        check(DecideActivation(900,false,false,false,false)==ActivationAction::cancel && DecideActivation(100,false,false,false,false)==ActivationAction::cancel,"actor that became invalid cancels the start");
+        check(DecideActivation(900,false,false,true,true)==ActivationAction::wait && DecideActivation(3000,false,false,true,true)==ActivationAction::wait,"a pause or custom menu defers the start");
+        check(DecideActivation(3001,false,false,true,true)==ActivationAction::cancel,"a long block gives up");
+        check(std::string(ActivationReason(true,false,true))=="dialogue_menu_opened" && std::string(ActivationReason(false,true,true))=="session_active"
+              && std::string(ActivationReason(false,false,false))=="invalid_target" && std::string(ActivationReason(false,false,true))=="timeout","cancel reasons are named");
+        check(std::string(ChatKeyName(ChatKeyAction::start_direct))=="start_direct" && std::string(ChatKeyName(ChatKeyAction::open_text))=="open_text_box","chat key outcomes are named for the log");
+        check(!OpensTextBoxOnStart(StartSource::activation) && !OpensTextBoxOnStart(StartSource::push_to_talk),"activation and F8 starts never open the text box");
+        check(OpensTextBoxOnStart(StartSource::chat_key) && OpensTextBoxOnStart(StartSource::talk_line),"chat key and Talk-with-me open the text box");
+        check(KeyLabel(35)=="H" && KeyLabel(64)=="F6" && KeyLabel(65)=="F7" && KeyLabel(66)=="F8" && KeyLabel(87)=="F11" && KeyLabel(1)=="key 1","key labels");
+        check(ActivationHint(35,66,65)=="ANIMA: press H to type, hold F8 to talk, F7 for options","activation hint text");
+    }
+    {
+        using namespace anima;
+        check(CaptionLines("Ulfberth","").empty() && CaptionLines("","  \n ").empty(),"empty caption text gives no lines");
+        auto one=CaptionLines("Ulfberth","Well, what is it, then?");
+        check(one.size()==1 && one[0]=="Ulfberth: Well, what is it, then?","name prefix on a short line");
+        check(CaptionLines("","Hello there")[0]=="Hello there","no prefix without a name");
+        std::string words; for(int i=0;i<12;++i) words+="alpha ";
+        auto two=CaptionLines("N",words);
+        bool within=true; for(const auto& l:two) within=within&&l.size()<=kCaptionWidth;
+        check(two.size()==2 && within && two[0].back()!=' ',"wraps at 70 at a word boundary");
+        std::string longText; for(int i=0;i<60;++i) longText+="word ";
+        auto three=CaptionLines("Name",longText);
+        check(three.size()==3 && three[2].size()<=kCaptionWidth && three[2].substr(three[2].size()-3)=="...","three-line cap with ellipsis");
+        check(three[2].substr(three[2].size()-4,1)!=" " && three[2].find("wor...")==std::string::npos,"ellipsis follows a whole word");
+        check(CaptionLines("",std::string(300,'x')).size()==3,"unbroken text is hard cut");
+        std::string exact(70,'a');
+        check(CaptionLines("",exact).size()==1 && CaptionLines("",exact)[0]==exact,"exactly 70 characters stays on one line");
+        check(!ShowCaptionMessage(true,false,true),"engine subtitle default shows no message");
+        check(ShowCaptionMessage(true,true,true) && ShowCaptionMessage(false,false,true) && ShowCaptionMessage(true,false,false),"fallback, message-only, or no manager show the message");
+    }
     check(anima::SayTopicLocalId(1)==0x804 && anima::SayTopicLocalId(2)==0x806 && anima::SayTopicLocalId(0)==0 && anima::SayTopicLocalId(3)==0 && anima::SayTopicLocalId(-1)==0,"say topics map to Anima.esp locals");
     check(anima::DecideSayProof(false,0)==anima::SayProof::waiting && anima::DecideSayProof(false,1999)==anima::SayProof::waiting,"say waits for proof of speech");
     check(anima::DecideSayProof(true,50)==anima::SayProof::started,"say starts only once the actor is speaking");
     check(anima::DecideSayProof(false,2000)==anima::SayProof::failed && anima::DecideSayProof(true,5000)==anima::SayProof::started,"say with no speech after 2 s fails");
     check(!anima::MayStopCurrentDialogue(true) && anima::MayStopCurrentDialogue(false),"an opening never stops the NPC's current dialogue");
     constexpr auto metadata=anima::VersionMetadata();
-    check(metadata.pluginVersion==REL::Version{0,5,3,0}.pack(),"plugin version is 0.5.3");
+    check(metadata.pluginVersion==REL::Version{0,5,7,0}.pack(),"plugin version is 0.5.7");
     check(metadata.versionIndependence==0,"legacy loader must not see unknown post-629 flags");
     check(metadata.versionIndependenceEx==SKSE::PluginVersionData::kVersionIndependentEx_AddressLibraryV5,"V5 flag without false NoStructUse claim");
     check(metadata.compatibleVersions[0]==REL::Version{1,6,318,0}.pack(),"legacy export target");

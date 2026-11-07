@@ -9,7 +9,7 @@ spec = importlib.util.spec_from_file_location("install_skyrim_connector", PATH)
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 
-PACKAGED = "[Connection]\nPort=8768\nChatKey=64\n\n[Console]\nLaunchConsole=0\nConsoleExe=\n"
+PACKAGED = "[Connection]\nPort=8768\nChatKey=35\n\n[Console]\nLaunchConsole=0\nConsoleExe=\n"
 
 
 def package(path):
@@ -22,7 +22,18 @@ def package(path):
 
 def test_merge_keeps_existing_values_and_adds_new_ones():
     merged = installer.merge_ini("[Connection]\nPort=9000\n", PACKAGED, None)
-    assert "Port=9000" in merged and "ChatKey=64" in merged and "LaunchConsole=0" in merged
+    assert "Port=9000" in merged and "ChatKey=35" in merged and "LaunchConsole=0" in merged
+
+
+def test_merge_migrates_the_old_default_chat_key(capsys):
+    merged = installer.merge_ini("[Connection]\nChatKey=64\nPort=9000\n", PACKAGED, None)
+    assert "ChatKey=35" in merged and "ChatKey=64" not in merged and "Port=9000" in merged
+    assert "Migrated ChatKey=64" in capsys.readouterr().out
+
+
+def test_merge_keeps_a_deliberately_chosen_chat_key(capsys):
+    merged = installer.merge_ini("[Connection]\nChatKey=62\n", PACKAGED, None)
+    assert "ChatKey=62" in merged and "Migrated" not in capsys.readouterr().out
 
 
 def test_merge_turns_console_on_with_its_path():

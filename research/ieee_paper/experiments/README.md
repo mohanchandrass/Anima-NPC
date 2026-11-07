@@ -1,5 +1,19 @@
 ﻿# Reproducing the revised experiments
 
+## Current-system studies (2026-11-06)
+
+Offline and free: no API, Ollama or game call. From the repository root:
+
+```powershell
+$env:PYTHONPATH = "src;cv/backend;."
+.\.venv\Scripts\python.exe -X utf8 research/ieee_paper/experiments/scripts/current_system_study.py
+.\.venv\Scripts\python.exe -X utf8 research/ieee_paper/experiments/scripts/live_audit.py
+```
+
+`live_audit.py` reads the ignored local files under `output/skyrim` and uses a fixed log and frame cut-off. Screenshot retention can remove old frames, so its frame audit may not reproduce later. Its output excludes player text, reply text and session IDs. Language and vision models are scripted in `current_system_study.py`, so it measures conformance and overhead, not reply quality or visual accuracy.
+
+The sections below describe the earlier study.
+
 These are real MiniLM/Chroma and configured-provider observations over original controlled Cedarvale fiction. They are not independent human ratings or a Skyrim benchmark. Read `research/SCIENTIFIC_EVALUATION_REPORT.md` before interpreting results.
 
 ## Environment and data

@@ -11,7 +11,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_anima_esp import build_esp  # noqa: E402
+from build_anima_esp import build_esp, build_seq  # noqa: E402
 
 SUPPORTED_RUNTIMES = ("1.6.318.0", "1.7.104.0")
 NATIVE = ROOT / "src/npc/adapters/skyrim/native"
@@ -72,7 +72,7 @@ def package(dll: Path, pins, console: Path, scripts=()):
     output = ROOT / "output/skyrim-mod"
     output.mkdir(parents=True, exist_ok=True)
     path = output / "AnimaConnector.zip"
-    manifest = {"plugin_version": "0.5.3", "target_runtimes": list(SUPPORTED_RUNTIMES),
+    manifest = {"plugin_version": "0.5.7", "target_runtimes": list(SUPPORTED_RUNTIMES),
                 "dll_sha256": hashlib.sha256(dll.read_bytes()).hexdigest(),
                 "console_exe_sha256": hashlib.sha256(console.read_bytes()).hexdigest(), "dependencies": pins,
                 "live_game_verified": False,
@@ -84,6 +84,7 @@ def package(dll: Path, pins, console: Path, scripts=()):
         archive.write(NATIVE / "AnimaConnector.ini", "SKSE/Plugins/AnimaConnector.ini")
         # Fixed timestamp keeps the archive entry reproducible; the plugin is generated, not copied.
         archive.writestr(zipfile.ZipInfo("Anima.esp", (2026, 1, 1, 0, 0, 0)), build_esp())
+        archive.writestr(zipfile.ZipInfo("Seq/Anima.seq", (2026, 1, 1, 0, 0, 0)), build_seq())  # starts the Start Game Enabled quest
         for script in scripts:
             archive.write(script, f"Scripts/{Path(script).name}")
         archive.writestr("AnimaConnector/build.json", json.dumps(manifest, indent=2))
@@ -102,6 +103,8 @@ def package(dll: Path, pins, console: Path, scripts=()):
                     archive.write(source / filename, f"AnimaConnector/licenses/{name}-{filename}")
             if name == "spdlog":
                 archive.write(source / "include/spdlog/fmt/bundled/fmt.license.rst", "AnimaConnector/licenses/fmt-LICENSE.rst")
+    (output / "Seq").mkdir(exist_ok=True)
+    (output / "Seq" / "Anima.seq").write_bytes(build_seq())
     (output / "Anima.esp").write_bytes(build_esp())  # keep the unpacked copy in step with the packaged plugin
     (output / "build.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return path

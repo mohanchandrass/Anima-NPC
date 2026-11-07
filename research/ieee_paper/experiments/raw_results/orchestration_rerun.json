@@ -1,0 +1,192 @@
+{
+ "note": "Rerun on the 6 Nov 2026 working tree. too_long passed=false only because the study still expects the older error_fallback outcome; length-only faults are now shortened.",
+ "behaviour": {
+  "turns": 68,
+  "passed": 68,
+  "routes": {
+   "authored": 26,
+   "generate": 37,
+   "end": 5
+  },
+  "zero_model_turns": 31,
+  "failures": []
+ },
+ "faults": [
+  {
+   "fault": "control_valid",
+   "expected": "model_success",
+   "statuses": {
+    "model_success": 20
+   },
+   "max_calls": 1,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "malformed_json",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 2,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "extra_field",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 2,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "too_long",
+   "expected": "error_fallback",
+   "statuses": {
+    "repair_success": 20
+   },
+   "max_calls": 1,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": false,
+   "repeats": 20
+  },
+  {
+   "fault": "out_of_character",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 2,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "fake_citation",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 2,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "truncated_reply",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 2,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "invalid_then_valid",
+   "expected": "repair_success",
+   "statuses": {
+    "repair_success": 20
+   },
+   "max_calls": 2,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "timeout",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 1,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "rate_limited",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 1,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "auth_failure",
+   "expected": "error_fallback",
+   "statuses": {
+    "error_fallback": 20
+   },
+   "max_calls": 1,
+   "bad_text_delivered": 0,
+   "replies_delivered": 20,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "world_changed",
+   "expected": "cancelled",
+   "statuses": {
+    "cancelled": 20
+   },
+   "max_calls": 1,
+   "bad_text_delivered": 0,
+   "replies_delivered": 0,
+   "passed": true,
+   "repeats": 20
+  },
+  {
+   "fault": "cancelled",
+   "expected": "cancelled",
+   "statuses": {
+    "cancelled": 20
+   },
+   "max_calls": 0,
+   "bad_text_delivered": 0,
+   "replies_delivered": 0,
+   "passed": true,
+   "repeats": 20
+  }
+ ],
+ "model_swap": {
+  "identical_routes": true,
+  "identical_prompts": true
+ },
+ "overhead": {
+  "authored": {
+   "n": 1000,
+   "mean_ms": 1.2664832999871578,
+   "median_ms": 0.7900499999777821,
+   "p95_ms": 2.0385000007081544,
+   "max_ms": 26.247699999657925
+  },
+  "generate": {
+   "n": 1000,
+   "mean_ms": 1.8733905000153754,
+   "median_ms": 1.1703000004672504,
+   "p95_ms": 2.89249999968888,
+   "max_ms": 28.319500000179687
+  }
+ }
+}

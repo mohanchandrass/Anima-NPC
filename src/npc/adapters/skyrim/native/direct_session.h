@@ -3,7 +3,7 @@
 namespace anima {
 // A "direct" session talks to an actor picked with the crosshair, with no vanilla DialogueMenu open.
 inline constexpr float kDirectMaxDistance = 600.0F;
-inline constexpr std::int64_t kDirectIdleMs = 60000;
+inline constexpr std::int64_t kDirectIdleMs = 120000;  // the owner may wait to type; any key press also restarts the idle timer
 
 // Living, non-hostile, non-player actor that is not in combat and has a base record.
 inline bool ValidDirectTarget(bool isActor, bool isPlayer, bool hasBase, bool dead, bool hostile, bool inCombat) {

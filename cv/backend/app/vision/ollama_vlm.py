@@ -13,7 +13,12 @@ from npc.vision.client import validate_cv_url
 class VLMUnavailableError(RuntimeError): pass
 class VLMValidationError(RuntimeError): pass
 
-PROMPT = """Analyze this Skyrim gameplay screenshot. YOLO detections below are supporting evidence only and may be wrong. Return ONLY JSON with keys: environment (object: description, location_guess, visible_conditions), characters (array: description, identity, position, visible_attributes, confidence_or_certainty where certainty is certain/likely/uncertain), objects (array: label, description, position), player_actions (array), spatial_relationships (array), events (array), uncertainties (array). Report only visible facts; use null or empty values when unknown. Never claim exact NPC identity, player intent, game state, or an action unless visually clear. Detections: """
+PROMPT = """Analyze this Skyrim gameplay screenshot. YOLO detections below are supporting evidence only and may be wrong. Return ONLY one JSON object with exactly this shape, replacing each <...> with what you see:
+{"environment": {"description": "<one sentence describing the visible place>", "location_guess": "<kind of place, or null>", "visible_conditions": ["<lighting, weather or time of day>"]},
+"characters": [{"description": "<appearance>", "identity": null, "position": "<where in the image>", "visible_attributes": ["<clothing or item>"], "confidence_or_certainty": "certain|likely|uncertain"}],
+"objects": [{"label": "<short name>", "description": "<what it looks like>", "position": "<where in the image>"}],
+"player_actions": ["<sentence>"], "spatial_relationships": ["<sentence>"], "events": ["<sentence>"], "uncertainties": ["<what cannot be determined>"]}
+Report only visible facts; use null or empty arrays when unknown, and never copy a <...> placeholder. Never claim exact NPC identity, player intent, game state, or an action unless visually clear. Detections: """
 
 
 class OllamaVLM:

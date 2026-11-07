@@ -51,6 +51,36 @@ int main()
     if (anima::EvaluateDialogue(request, receiver, static_cast<Topics*>(nullptr), 7) != Decision::reject) {
         std::cerr << "missing dialogue manager must fail closed\n"; ++failures;
     }
+    // Direct (menu-less) sessions: no menu speaker is required, the actor's own speech decides.
+    topics.menuOpen = false; topics.currentTopicInfo = nullptr;
+    auto direct = [&](Decision expected, const char* label) {
+        if (anima::EvaluateDialogue(request, receiver, &topics, 7, false) != expected) {
+            std::cerr << label << '\n'; ++failures;
+        }
+    };
+    direct(Decision::play, "direct session without a dialogue menu must deliver");
+    if (anima::EvaluateDialogue(request, receiver, static_cast<Topics*>(nullptr), 7, false) != Decision::play) {
+        std::cerr << "direct session needs no dialogue manager\n"; ++failures;
+    }
+    topics.menuOpen = true; topics.speaker = 8;
+    direct(Decision::play, "direct session ignores the menu speaker");
+    topics.menuOpen = false; topics.speaker = 7;
+    receiver.vanillaTalking = true; direct(Decision::wait, "direct session waits for the actor's vanilla line"); receiver.vanillaTalking = false;
+    receiver.now = 2000; direct(Decision::reject, "direct expired delivery"); receiver.now = 1000;
+    receiver.npc = "other"; direct(Decision::reject, "direct changed speaker"); receiver.npc = "npc";
+    receiver.revision = 5; direct(Decision::reject, "direct changed state"); receiver.revision = 4;
+    receiver.actorReady = false; direct(Decision::reject, "direct combat or death"); receiver.actorReady = true;
+    receiver.duplicate = true; direct(Decision::ignore, "direct duplicate"); receiver.duplicate = false;
+    // The default stays the menu rule.
+    if (anima::EvaluateDialogue(request, receiver, &topics, 7) != Decision::reject) {
+        std::cerr << "menu rule must remain the default\n"; ++failures;
+    }
+    // Menu session with the menu open still gets the vanilla-line rules.
+    topics.menuOpen = true; topics.currentTopicInfo = &line;
+    if (anima::EvaluateDialogue(request, receiver, &topics, 7, true) != Decision::wait) {
+        std::cerr << "menu session must still wait for a vanilla line\n"; ++failures;
+    }
+    topics.currentTopicInfo = nullptr;
     request.id = "../../outside"; check(Decision::reject, "invalid delivery path ID");
     return failures ? 1 : 0;
 }

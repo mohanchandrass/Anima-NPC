@@ -8,29 +8,46 @@ import sys
 import threading
 import time
 
-RESET, RED, CYAN, GREEN, YELLOW = "\x1b[0m", "\x1b[91m", "\x1b[96m", "\x1b[92m", "\x1b[93m"
+RESET, RED, CYAN, GREEN, YELLOW = "[0m", "[91m", "[96m", "[92m", "[93m"
 _ERROR = re.compile(r"\[(error|critical)\]|\b(ERROR|CRITICAL|Traceback|FAILED)\b|_FAILED\b|_ERROR\b")
 _WARN = re.compile(r"\[warning\]|\bWARNING\b|\bWARN\b")
 LOG_NAME = "AnimaConnector.log"
 WHITE, MAGENTA, BLUE = "[1;97m", "[95m", "[94m"
+INPUT_CYAN = "[1;96m"  # bold cyan: what the player gave (plain cyan stays with plugin lines and native acks)
 # Turn traffic gets its own colour so a conversation can be followed at a glance.
-TRAFFIC = {"PLAYER_INPUT": WHITE, "INPUT_SUBMITTED": WHITE, "PIPELINE_RESULT": MAGENTA, "OUTPUT_STAGED": YELLOW + "[1m",
-           "TURN_TIMING": BLUE, "TTS_ENGINE": BLUE, "AUDIO_OUTPUT": BLUE, "NATIVE_ACK": CYAN}
+TRAFFIC = {"PLAYER_INPUT": INPUT_CYAN, "INPUT_SUBMITTED": INPUT_CYAN, "PIPELINE_RESULT": MAGENTA, "OUTPUT_STAGED": YELLOW + "[1m",
+           "TURN_TIMING": BLUE, "TTS_ENGINE": BLUE, "AUDIO_OUTPUT": BLUE, "NATIVE_ACK": CYAN,
+           "GAME_CONTEXT": WHITE, "BANNER": WHITE,
+           "MODEL_INPUT": BLUE, "MODEL_PROMPT": BLUE, "MODEL_OUTPUT": GREEN, "VALIDATION": GREEN, "RETRIEVAL": GREEN,
+           "REPAIR": YELLOW, "FALLBACK": YELLOW, "CV_UNAVAILABLE": YELLOW,
+           "CV_REQUEST": MAGENTA, "CV_RESULT": MAGENTA, "CV_CONTEXT": MAGENTA, "SCREENSHOT": MAGENTA}
+# Lines whose payload is dialogue, prompts or model text: words in it must not trigger the generic error/warning rules.
+FREE_TEXT = frozenset({"PLAYER_INPUT", "INPUT_SUBMITTED", "MODEL_PROMPT", "MODEL_OUTPUT", "OUTPUT_STAGED"})
 _KIND = re.compile(r"\]\s+([A-Z][A-Z_]+)")
 
 
-def colour_line(line: str, source: str) -> str:
-    """Return the line with ANSI colour: errors red, warnings yellow, plugin cyan, bridge green."""
+def colour_line(line: str, source: str, color: bool = True) -> str:
+    """Return the line with ANSI colour: errors red, warnings yellow, plugin cyan, bridge green (plain with color=False)."""
     line = line.rstrip("\r\n")
-    if _ERROR.search(line):
+    prefix = f"[{source}] " if source == "PLUGIN" else ""
+    if not color:
+        return prefix + line
+    kind = _KIND.search(line) if source != "PLUGIN" else None
+    kind = kind.group(1) if kind else None
+    if kind in FREE_TEXT:
+        # Only the structured status fields decide red/yellow here, never the words a player or model produced.
+        if kind == "MODEL_OUTPUT":
+            colour = RED if re.search(r"\bstatus=\"(failed|cancelled)\"", line) else TRAFFIC[kind]
+        else:
+            colour = TRAFFIC[kind]
+    elif _ERROR.search(line):
         colour = RED
-    elif _WARN.search(line):
+    elif _WARN.search(line) or (kind == "SCREENSHOT" and " warning=" in line):
         colour = YELLOW
     else:
         colour = CYAN if source == "PLUGIN" else GREEN
-        if source != "PLUGIN" and (kind := _KIND.search(line)) and kind.group(1) in TRAFFIC:
-            colour = TRAFFIC[kind.group(1)]
-    prefix = f"[{source}] " if source == "PLUGIN" else ""
+        if kind in TRAFFIC:
+            colour = TRAFFIC[kind]
     return f"{colour}{prefix}{line}{RESET}"
 
 
@@ -109,7 +126,7 @@ def _enable_ansi():
         kernel.SetConsoleMode(handle, mode.value | 0x0004)
 
 
-def start_tail(path: Path | None, emit=None, interval: float = 0.25):
+def start_tail(path: Path | None, emit=None, interval: float = 0.25, color: bool = True):
     """Print new plugin log lines from a daemon thread; never raises into the bridge."""
     if path is None:
         return None
@@ -120,7 +137,7 @@ def start_tail(path: Path | None, emit=None, interval: float = 0.25):
         while True:
             try:
                 for line in tail.read_new():
-                    emit(colour_line(line, "PLUGIN"))
+                    emit(colour_line(line, "PLUGIN", color))
             except Exception:  # a logging aid must never take the bridge down
                 pass
             time.sleep(interval)
@@ -130,13 +147,14 @@ def start_tail(path: Path | None, emit=None, interval: float = 0.25):
     return thread
 
 
-def setup(logger: logging.Logger, title: str = "Anima Skyrim Bridge"):
-    """Title, ANSI colours for bridge lines, and the [PLUGIN] tail. Call after diagnostics.configure()."""
-    _enable_ansi()
+def setup(logger: logging.Logger, title: str = "Anima Skyrim Bridge", color: bool = True):
+    """Title, ANSI colours for bridge lines (unless color=False), and the [PLUGIN] tail. Call after diagnostics.configure()."""
+    if color:
+        _enable_ansi()
     if os.name == "nt":
         import ctypes
         ctypes.windll.kernel32.SetConsoleTitleW(title)
-    for handler in logger.handlers:
+    for handler in logger.handlers if color else ():
         if type(handler) is logging.StreamHandler and handler.stream is sys.stdout:
             handler.setFormatter(ColourFormatter("%(asctime)s [ANIMA] %(message)s", datefmt="%H:%M:%S"))
-    return start_tail(plugin_log_path())
+    return start_tail(plugin_log_path(), color=color)

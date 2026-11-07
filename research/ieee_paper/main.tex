@@ -13,205 +13,242 @@
 \IEEEauthorblockA{RV University\\USNs (in author order): 1RVU23CSE282, 1RVU23CSE443, 1RVU23CSE317, 1RVU23CSE316}}
 \maketitle
 \begin{abstract}
-NPC dialogue requires coordinated persona, world knowledge, conversation context and response delivery rather than unrestricted text generation. We present Anima, an implemented orchestration architecture that combines deterministic engagement, persona-aware appraisal, source-bound retrieval, acknowledged dialogue history, a common model-provider contract and bounded response acceptance. A new evaluation uses 24 interconnected fictional world documents, indexed as 24 source chunks and separately as a 21-chunk authorized reference anthology. Six four-turn conversations produced 24 accepted real-model replies across three existing personas. Sequential traces preserve one, two and three prior exchanges in follow-up prompts. An assistant-coded qualitative audit examines support and referents without claiming independent human ratings; it also identifies unsupported elaboration and a secrecy presupposition. On 24 predeclared source-lookup queries, designated-source Precision@1 was 0.833, Recall@3 was 1.00 and mean reciprocal rank was 0.917. Thirty warm retrievals averaged 18.15 ms. Index synchronization exposed an edited fact without a generator-training step. Native Skyrim records demonstrate authored delivery and generated-response staging, while visible generated gameplay and audible playback remain unverified. The results support reusable orchestration mechanisms, not universal model equivalence or guaranteed semantic containment.
+Language models let non-player characters (NPCs) hold open conversations, but a model connected directly to a game answers from its own knowledge and breaks character: a peasant asked for the king's war plan should not know it. Training a custom model per game is costly and ties world knowledge to model weights. We propose a generalized orchestration layer between game and model that decides whether an NPC engages, what it may know and how it responds before any model is called. World knowledge comes from creator documents through scoped retrieval, so no training is needed, while thin connectors and a one-method provider contract isolate game and model. We implemented the layer as Anima, with a Skyrim connector and an optional vision path. In a two-world study, restricted facts reached a lower-standing NPC's prompt in 75 of 80 turns without scoping and 0 of 80 with it. Scripted tests confirmed rule conformance and safe fault handling. Hosted-model and live-game samples show the boundary working, with unsupported details and fallback replies. Vision changed no decision in 66 test pairs, and a capture fix cut black pixels from 98.8\% (median) to 6.2\%. Accuracy, a second game and human ratings remain open.
 \end{abstract}
 \begin{IEEEkeywords}
-non-player characters, persona conditioning, retrieval-augmented generation, model abstraction, knowledge boundaries, dialogue evaluation
+non-player characters, large language models, orchestration, retrieval-augmented generation, computer vision, knowledge boundaries, game AI
 \end{IEEEkeywords}
 
 \section{Introduction}
-Non-player character (NPC) dialogue must respond to a player's request without abandoning the character's identity, obligations, or knowledge. Authored dialogue gives predictable control, but broader coverage requires additional content and branching logic. Language models supply flexible realization; fluency alone, however, does not establish that an NPC knows a fact or should engage. Game-dialogue research already motivates conditioning on character, history, and state~\cite{callison2022}.
+Scripted dialogue cannot handle what writers did not anticipate, while language models raise problems of control~\cite{gallotta2024}. A model connected directly to an NPC brings its own general knowledge and helpfulness, so characters answer things they could not know. Consider a peasant asked for the king's war plan. The peasant has never met the king and should not know the plan, though may repeat a rumour. The king's adviser, asked the same question, does know it. Replies must follow from an NPC's standing in the world, so that the character seems to live there. We call this aim believable and make no claim of sentience.
 
-Game knowledge changes independently of model behavior: locations and character facts may be revised while an inference backend remains fixed. Character training~\cite{shao2023} and parameter-efficient adaptation~\cite{hu2022} remain legitimate strategies. External retrieval~\cite{lewis2020} offers a complementary maintenance mechanism by supplying updated domain facts during inference rather than requiring an application training operation.
+Two practical barriers stand in the way. Training a character model for each game is expensive and fixes world knowledge in its weights~\cite{shao2023,hu2022}. Connecting to games is also hard to generalize, because each exposes different data through its mod support, and mods such as Mantella~\cite{mantella} are tied to specific titles.
 
-Anima places a dedicated orchestration layer between interaction interfaces and model inference. The layer appraises persona and trusted state, chooses authored/end/generated routes, retrieves source-bound evidence when needed, and validates model output under deadlines. Its contribution is the integration of these boundaries, not the invention of RAG, persona prompting, or provider abstraction. The term knowledge-bounded describes the architecture's intended access and acceptance controls; it does not assert guaranteed semantic faithfulness.
-
-Our contributions are the implemented policy-controlled composition, traceable multi-turn knowledge conversations, explicit provider and source boundaries, and native Skyrim delivery evidence. The experiments examine coordinated behavior without claiming new retrieval or memory algorithms. Small authored datasets, one real model and non-independent semantic assessment constrain generalization.
+We therefore propose an orchestration layer with common contracts, thin game connectors and a replaceable model. A creator supplies documents instead of training a model, retrieval~\cite{lewis2020} provides them at inference time, and deterministic rules decide behaviour before any model call. Our contributions are a layered architecture implemented with a working Skyrim connector; per-NPC knowledge binding and a deterministic conversation director applied before generation; a trust boundary for camera-derived scene descriptions; and an evaluation of knowledge boundaries, fault handling, model independence and live delivery.
 
 \section{Related Work}
-RAG combines parametric generation with nonparametric retrieved memory~\cite{lewis2020}. Anima supplies passages to an external inference model rather than training the RAG components. Dense passage retrieval establishes representation-based candidate selection~\cite{karpukhin2020}; our implementation uses an existing MiniLM encoder and cosine search, not a new retrieval objective.
+Persona-Chat established profile-conditioned dialogue~\cite{zhang2018}. Character-LLM and RoleLLM adapt model parameters to characters~\cite{shao2023,wang2024}, and LoRA lowers that cost~\cite{hu2022}, but knowledge changes then need new training. TimeChara shows strong models revealing what a character should not yet know~\cite{ahn2024}, and RoleFact attributes this to built-in knowledge~\cite{sadeq2024}.
 
-Character-LLM adapts characters through profiles and experiences~\cite{shao2023}. Anima instead keeps authored personas and current state outside generator parameters. This does not establish superior character quality or training-cost savings; LoRA~\cite{hu2022} is a relevant efficient adaptation alternative.
+RAG supplies knowledge at inference time~\cite{lewis2020,karpukhin2020}. RAGAs separates relevance from faithfulness~\cite{es2024}, and long contexts are not reliably used~\cite{liu2024}. Generative Agents combines memory, retrieval and planning~\cite{park2023}, and tabletop research examines game-state tracking in dialogue~\cite{callison2022}.
 
-Generative Agents already orchestrates memory, retrieval, reflection, and planning~\cite{park2023}. Consequently, the defensible contribution here is a particular policy-controlled integration with explicit trust, evidence, and timing boundaries, rather than a first unified agent framework. Game-state-aware dialogue is also established~\cite{callison2022}. Anima focuses on reusable runtime composition, without reproducing autonomous town simulation or a trained gameplay model.
+For vision, YOLO provides real-time detection~\cite{redmon2016}, though general-object classes do not cover game-specific entities. CLIP links images and language in a shared embedding space~\cite{radford2021}, and vision-language models such as Qwen2.5-VL return structured descriptions directly~\cite{bai2025}. Rade\v{z} and Bohak ground NPC dialogue in panoramic images and segmentation~\cite{radez2026}.
 
-Profile-conditioned dialogue is established by Persona-Chat~\cite{zhang2018}; an authored profile alone is neither a new method nor evidence of sustained persona consistency. Anima adds runtime source authorization, deterministic route selection and game delivery around that conditioning.
-
-Evaluation must separate retrieval relevance, faithful evidence use, and generation quality, as emphasized by RAGAs~\cite{es2024}. Long-context availability does not guarantee reliable context utilization~\cite{liu2024}. Our literal answer-target diagnostic therefore cannot substitute for independent claim-level support or persona evaluation.
+These components are established. What we add is their composition as a reusable runtime layer that applies engagement decisions and per-NPC knowledge limits before generation, without training, and that treats a camera frame as what the player sees rather than what the NPC perceives.
 
 \section{Problem Formulation and Research Contributions}
-For utterance $u$, trusted snapshot $s$, observations $o$, persona $p$, acknowledged history $H$, and external documents $D$, appraisal constructs $c=A(u,s,o,p,H)$ and policy selects $a=\pi(c)$. A generated route retrieves $E=R(q(c),D,b)$ under trusted source binding $b$, constructs prompt $P=B(c,a,E)$, and obtains candidate $y=G_\theta(P)$. Acceptance $V(y,c,a,E)$ controls whether the response leaves the runner. Here $q$ resolves the retrieval question, $b$ is the authorized source binding, $B$ packs the prompt, and $G_\theta$ is the selected generator. Authored/end routes bypass retrieval and inference.
+For NPC $n$, the input is utterance $u$, trusted game state $s$, persona $p$, completed history $H$, conversation state $C$ and documents $D$, of which only a bound subset $D_n$ is available. The task is constrained dialogue generation: output a validated reply $y$, or decide not to generate.
+\begin{align}
+c&=A(u,s,p,H), & a&=\pi(c),\nonumber\\
+m_0&=M(u,C,p), & E&=R(q,D_n,k),\nonumber\\
+m&=F(m_0,E,C), & y&=G(B(c,a,m,E)).\nonumber
+\end{align}
+Here $A$ appraises the situation, $\pi$ selects a route, $M$ selects a conversational move, $R$ returns at most $k=3$ passages for query $q$, $F$ revises the move once material is known, $B$ builds the prompt, and $G$ is any model. Acceptance check $V$ decides whether $y$ leaves the layer. Authored and end routes skip $R$ and $G$. Since $G$ may still add facts from its own weights, the bound covers supplied context only.
 
-We ask: \textbf{RQ1}, how does the implemented pipeline coordinate knowledge and acknowledged context across connected turns? \textbf{RQ2}, how well does retrieval rank predeclared sources, and what support limitations remain in generated replies? \textbf{RQ3}, how do authored personas and unknown-information boundaries appear in the resulting conversations? \textbf{RQ4}, where does the common contract separate orchestration from provider-specific inference? \textbf{RQ5}, can external knowledge be revised and accepted output reach a native game receiver? RQ1--RQ3 use exploratory traces and retrieval measurements, not a validated human-quality score. RQ4 is an architectural assessment; RQ5 separates retrieval updating from native lifecycle evidence.
-
-The implementation contribution comprises deterministic engagement before model work, separation of trusted observations and untrusted references, source-bound retrieval with prompt-level evidence accounting, bounded candidate acceptance through a provider-neutral interface, and revision-correlated native game delivery. Model agnosticism is restricted to that interface and compatible transports. Incompatible APIs require an adapter, and model capabilities remain consequential.
+We ask: \textbf{RQ1}, does binding keep restricted knowledge from NPCs that should not have it, and with what real-model behaviour? \textbf{RQ2}, does the layer hold when the model fails or the player applies pressure? \textbf{RQ3}, what must change for a new model or world? \textbf{RQ4}, do replies reach a real game and enter memory? \textbf{RQ5}, what can computer vision add, and does its trust boundary hold?
 
 \section{Proposed System Architecture}
-Fig.~\ref{fig:architecture} presents the implemented component boundaries. The central \texttt{PreviewRunner} composes policy, context, optional retrieval, provider invocation, validation, and one permitted repair. The local lab and Skyrim connector invoke the same core rather than separate dialogue engines.
+Fig.~\ref{fig:architecture} shows the layers. The \textbf{core} holds no game or vendor logic and composes each turn: appraisal keeps only facts the NPC could perceive, policy selects a route, the director selects a move, retrieval fetches bound evidence, and validation accepts or rejects the reply. \textbf{Knowledge} is prepared offline from creator files. \textbf{Models} sit behind one interface. The \textbf{connector} maps a game's data to the contracts, loads social state, delivers replies and returns receipts, and only completed turns enter memory.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=.88\textwidth]{figures/system_architecture.pdf}
-\caption{Policy-controlled architecture linking game interaction, knowledge access and response acceptance. Grouped boundaries separate interaction, persona/context, central orchestration, retrieval and provider normalization. Solid arrows carry data/evidence; dashed arrows denote control or optional work. Offline preparation is separate from inference. Native delivery is evaluated separately from retrieval and inference quality.}
+\includegraphics[width=.8\textwidth]{figures/system_architecture.pdf}
+\caption{Proposed architecture. Only the connector knows the game, and only the provider contract knows the model. Dashed elements are optional or bypass paths.}
 \label{fig:architecture}
 \end{figure*}
 
-Appraisal verifies scope/revision and filters observations by perceiver, subject, confidence, and freshness. Conflicting equal-rank observations remain unknown. Persona and relationships influence tone and willingness, while familiarity does not grant knowledge. Deterministic policy can select authored greetings/refusals or end interaction before calling a model.
-
-Retrieval is restricted by configured game/world/NPC file bindings; approximate similarity does not itself authorize a source. Prompt packing rechecks evidence and preserves whole passages. The provider contract contains messages, text, model identity, finish reason, and usage rather than vendor-specific orchestration policy. Candidate output cannot directly mutate quests, inventory, or relationships.
-
-SocialStore persists revision-checked relationships and up to eight acknowledged exchanges. The lab commits display acknowledgements; current Skyrim composition can commit correlated completed native receipts with game-completed provenance. Interrupted or failed turns are excluded from completed history. Neither acknowledgement proves hearing. A durable production outbox and complete save-history reconstruction remain outside this slice.
+\textit{What a new game supplies.} A connector provides player text or speech; stable NPC and player identifiers; world and save scope; location, time, combat and availability state; and facts with source, age, confidence and perceivers. It shows only validated text, honours expiry, stops on interruption or combat, and reports started, completed, interrupted or failed receipts. Model output cannot change game state. Creators add personas and documents, and a missing fact stays unknown rather than being invented. Thin connectors built on existing mod support are the intended route, since a universal connector is impractical. Generality across games remains a design goal, because one game is connected so far.
 
 \section{System Methodology}
-\subsection{Offline Knowledge and Online Retrieval}
-Loaders extract text from supported plain-text, structured, PDF, DOCX, and HTML files; OCR is not implemented. Encoder token offsets form default 220-token chunks with 32-token overlap. The all-MiniLM-L6-v2 sentence encoder~\cite{minilm2020,minilm_model} runs through ONNX Runtime~\cite{onnxruntime} and produces 384-dimensional CPU vectors. Chroma~\cite{chroma} stores cosine-search vectors with source/revision metadata. File hashes include content and pipeline parameters; a manifest publishes a replacement only after that file's batches succeed. Index synchronization is explicit, outside dialogue turns.
-
-Online retrieval embeds the resolved question and searches committed revisions of the authorized source. At most three evidence passages enter the dialogue boundary. No learned reranker is implemented. Truncated, duplicate, empty, wrong-source, or mismatched evidence is removed or rejected. Optional distance filtering is not calibrated confidence. The manifest is enumerated to form revision filters, so large-corpus authorization scaling remains unmeasured.
+\subsection{Scoped Knowledge Without Training}
+Loaders read plain-text, structured, PDF, DOCX and HTML files. Text becomes 220-token chunks with 32-token overlap, embedded by all-MiniLM-L6-v2~\cite{minilm2020,minilm_model} on CPU through ONNX Runtime~\cite{onnxruntime} and stored in Chroma~\cite{chroma} with source and revision metadata. Changing what an NPC knows means editing a file and re-indexing. A trusted configuration binds each NPC to one source file. Filtering precedes ranking, so similarity cannot grant access (Fig.~\ref{fig:binding}), and each hit is rechecked afterwards. Up to eight candidates are retrieved so that passages already told can be removed, and at most three reach the prompt. Layered public, regional and faction sources are not yet implemented.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=.94\columnwidth]{figures/rag_orchestration_pipeline.pdf}
-\caption{Implemented online branches, including authored/end bypass, optional retrieval, bounded repair, timeout fallback and stale/cancelled rejection. Repair shares the original cutoff.}
-\label{fig:pipeline}
+\includegraphics[width=.94\columnwidth]{figures/knowledge_binding.pdf}
+\caption{Knowledge binding. One question, one engine, different knowledge, because each NPC can read only its bound source.}
+\label{fig:binding}
 \end{figure}
 
-\subsection{Persona, Prompt, and Provider Boundary}
-Fig.~\ref{fig:pipeline} traces online route selection, retrieval, candidate acceptance and delivery. System content expresses authored persona, plan, response limits, and knowledge instructions. Player text, retrieved passages, history, and visual descriptions remain data. This separation is a prompt boundary, not a proven injection defense. A bounded rule resolves short pronoun follow-ups from the previous player question; it is not a general coreference model. Whole evidence passages precede recent whole exchanges during packing; short citation aliases resolve only to packed identifiers. Reference sources retain prior player/NPC text as untrusted memory; dialogue-export sources label prior NPC utterances explicitly unverified. Current evidence can correct prior replies. A conservative UTF-8 byte estimate replaces exact backend tokenization.
-
-Fig.~\ref{fig:provider} distinguishes the common interface, compatible HTTP transport, profile configuration, normalized reply, and offline double. Gemini and OpenRouter profiles use one chat-completions transport; they are not unrelated native SDK adapters. The scripted provider is not an LLM and is excluded from scientific model comparisons.
+\subsection{Dialogue Turn and Conversation Director}
+Fig.~\ref{fig:workflow} traces one turn. Hard rules for combat, threats, insults, availability and greetings run first, with authored lines that need no model. Across four identical questions, an earlier build sent byte-identical instructions and limits, so NPCs repeated themselves. The director fixes this without a model call. It reads a turn as new, repeat, rephrase, follow-up, push-back, shared news, stall, answered or return, then chooses a move such as answer, expand, answer differently, challenge, close topic, hold, admit limit or react. The move, a conversation brief, phrases to avoid and items already told enter the prompt. Rapport affects length and warmth only, and repetition never changes knowledge access or trust.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=.94\columnwidth]{figures/model_agnostic_architecture.pdf}
-\caption{Provider independence at the implemented contract. Backend substitution preserves core logic while endpoint/model/format settings can change. Unsupported protocols need new adapters; offline doubles are distinct from actual inference.}
+\includegraphics[width=.98\columnwidth]{figures/rag_orchestration_pipeline.pdf}
+\caption{Workflow for one dialogue turn. A retrieval result can revise the move, for example to admit limit when nothing new remains.}
+\label{fig:workflow}
+\end{figure}
+
+\subsection{Model Boundary and Acceptance}
+Prompts are structured and zero-shot. System content holds identity, goals, boundaries and limits, and permits in-character opinion and labelled hearsay while barring invented specifics. Player text, passages, history and visual descriptions are labelled as untrusted data, which is a prompt boundary and no proven injection defence. A model is reached through one method, \texttt{ModelProvider.generate} (Fig.~\ref{fig:provider}), so a compatible endpoint needs only a profile and another protocol needs one new class.
+
+The validator enforces strict JSON, length, modes, cues and supplied citations, and rejects assistant-style phrasing, repeated replies and capitalized names absent from the context. It does not verify claims against evidence. Recovery allows one repair or one transient retry, then an authored fallback, with at most two model calls. Rate-limit and authentication errors are not retried. Stale or cancelled work produces no speech.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.92\columnwidth]{figures/model_agnostic_architecture.pdf}
+\caption{Provider boundary. Backends change by configuration; other protocols need an adapter.}
 \label{fig:provider}
 \end{figure}
 
-Validation checks current state, finish reason, strict JSON/schema, modes, length, cues, and evidence-ID membership. Membership does not imply entailment, and the validator does not require support for every factual claim. One repair may occur within the same cutoff. Failures can select a validated authored fallback; stale/cancelled work produces no new speech. Local cancellation cannot guarantee cancellation of remote billing.
+\subsection{Visual Context From the Player's View}
+Games report only part of what is happening, so a camera frame is the one context source that does not depend on mod support. Fig.~\ref{fig:cv} shows the optional path. To avoid continuous inference beside the game, frames are taken when a conversation opens or context changes materially, plus on a player turn when CV is on and no fresh description exists. A local vision-language model~\cite{bai2025}, through Ollama at temperature zero, returns JSON that is validated into a versioned scene descriptor. Non-conforming objects are rejected, while minor type mismatches are coerced. A YOLO detector~\cite{redmon2016} is retained but disabled, since it adds a second GPU stack and cannot identify game-specific entities.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.94\columnwidth]{figures/cv_scene_pipeline.pdf}
+\caption{Optional vision path, grouped by process. A frame becomes a capped, expiring, untrusted text reference.}
+\label{fig:cv}
+\end{figure}
+
+The camera shows what the player sees, which is not what the NPC sees. The result is therefore cut to one environment line, four characters, eight objects and four uncertainties, bound to session and revision, and expired after 15~s. It enters the prompt only as an untrusted reference. It cannot change route, move, trust, retrieval or memory, and it cannot be cited. CV analysis and prompt attachment are off by default, while screenshot capture itself is on.
 
 \section{Implementation and Experimental Setup}
-\subsection{Current Implementation and Evaluation Scope}
-A source audit preceded redesign. The study invokes existing PreviewRunner, LocalRetriever, SocialStore and provider components without changing core runtime logic. Source fingerprints and complete provider-bound prompts accompany the data. Concurrent changes affected the native adapter and dialogue-export history branch; this experiment uses reference-mode evidence, whose packed-history path was unchanged. The new history wiring is an implementation capability; console acknowledgements here are harness-simulated display receipts, not game completions.
+The system runs locally on an Intel Core i7-13700HX with Windows, Python 3.11.9 and Skyrim SE 1.7.104, using a hosted model. The Skyrim connector pairs a native SKSE plugin with a loopback Python bridge and does not call Mantella code. It accepts typed text and held-key speech through faster-whisper on CPU. It speaks through Piper voices played on system audio, so voice is not positional, with subtitles timed to the planned duration. Unauthored NPCs receive default personas from role rules. A live profile cuts off a model call after 4~s and retries a transient failure once. The full offline regression suite, of over 900 tests, passed at the time of writing.
 
-The environment uses Python 3.11.9, CPU ONNX MiniLM and embedded Chroma on the previously documented Windows/i7-13700HX machine. The new experiment is distinct from the earlier 12-document, seven-pair study. Its raw data remain supplementary; literal answer-target matching is not the current headline measure. No claim of improved accuracy across the two datasets is made.
-
-\subsection{Knowledge Collection and Retrieval Labels}
-We authored 24 interconnected Cedarvale Markdown documents covering geography, public NPC roles, factions, ingredients, crafting, shops, quests, history, access rules and explicitly unknown facts. Stable CV01--CV24 section IDs identify original content. The collection uses the current Lantern Inn/Elin and smith/guard roles; it is original fictional knowledge, not a Skyrim lore benchmark. Documents deliberately distinguish stable references from current stock, permissions, private records and player quest state.
-
-Actual file-level ingestion produced 24 source chunks. Twenty-four queries specify one primary relevant source each before retrieval. Other documents may repeat supporting facts, so these labels are not exhaustive or independently adjudicated relevance. Metrics measure designated-source ranking. P@3 divides by three even when positions are missing; with one designated source its ceiling is $1/3$. Duplicate sources among the first three passages are collapsed without refilling slots.
-
-LocalRetriever currently permits one exact authorized file per NPC. For dialogue, the harness deterministically concatenates the same 24 documents, in filename order, into one public reference file and indexes it through the unchanged pipeline, producing 21 chunks. No question-specific selection or expected-answer injection occurs. Evidence retains anthology file/revision/chunk IDs; original section IDs remain text, not separate native metadata. This anthology can span original documents, but does not demonstrate multi-file runtime authorization. Retrieval metrics use the source-file layout; dialogue support uses the anthology layout.
-
-\subsection{Connected Conversations and Assessment}
-Six scenarios each contain four turns: A ingredients, B navigation, C quest sequence, D factions/history, E unknown knowledge and F a second-persona replay of A. The unchanged authored profiles are Elin (A/B/E), Daren (C/D) and Mira (F), including their roles, temperament, goals and initial relationships. The actual Iona profile is a space-station registrar and is not recast as a healer. A/F demonstrate factual reuse with different profiles, not a controlled causal estimate of persona effects.
-
-Each chat has isolated SQLite state. After accepted output, an explicit harness display acknowledgement admits that full exchange to the next turn. Failed responses are not acknowledged; their chat attempt stops. Full scenario snapshots, history, retrieved/packed passages, provider prompts/replies and timing are retained. The configured gemini-3.5-flash-lite compatible endpoint is the only real model tested. Limits are 24,000 input bytes, 400 output tokens, 2-s retrieval, 30-s transport and a development 60-s turn/59-s model cutoff. Requests are sequential and spaced at least 3 s; this pacing is included where incurred in response-ready timing.
-
-The six-axis rubric examines retrieval relevance, factual support, direct answering, follow-up referents, persona contradictions and unknown-information handling. An assistant-coded audit compares claims with packed evidence and trusted persona, treating prior replies as unverified. It is neither independent human evaluation nor a validated automated quality metric. Complete per-turn annotations and blank independent rating sheets accompany the data; no semantic-accuracy percentage is inferred from keywords or citation IDs.
-
-\subsection{Timing and Revision Protocol}
-Thirty warm source-file queries record embedding, Chroma call and total retrieval. One fresh-process query measures first use with cached weights and an existing index. Indexing and a disposable forge-location edit are timed separately. Provider-call timing measures the compatible transport operation, not pure device inference; no prompt-construction or validator-only timer is instrumented. Game/network contention is uncontrolled. No acquisition-to-playback latency distribution is claimed.
+We report five studies and do not pool them. \textbf{S1, knowledge scope:} two authored worlds, a kingdom and a space station, with three roles each at different standing and 120 fixed turns per condition, including direct, paraphrased, false-authority and injection queries. The real pipeline runs with a recording stub. The unscoped baseline merges all files into one index; the scoped condition binds each NPC to its own file. Marker phrases fixed in advance detect restricted facts in the provider-bound prompt. \textbf{S2, orchestration:} the real pipeline with scripted models over 17 situations and four personas, 13 fault conditions of 20 turns each, 50 unseen hostile or benign sentences, 40 pressure attempts and four provider implementations. \textbf{S3, hosted model:} gemini-3.5-flash-lite on the peasant example and on six four-turn conversations over a 24-document world, run before the director existed, with retrieval checked on 24 labelled queries. An AI assistant coded the replies against a rubric, so this is no human rating. \textbf{S4, live Skyrim:} console logs of 23 instrumented typed turns from successive builds, with Gemini selected over the default offline profile and retrieval and CV off. \textbf{S5, vision:} 128 paired turns with and without a descriptor, an audit of 100 frames from the original capture method, and small smoke tests of the capture and vision service.
 
 \section{Results and Discussion}
-\subsection{Multi-Turn Knowledge-Grounded Dialogue}
-All six scenarios completed, yielding 24 accepted generated replies. Twenty-five attempted turns/provider requests include one quota-failed E1 attempt; one bounded cooldown resume retained that failure and completed E/F without repeating A--D. No repair was needed for accepted replies. Every chat's history-used counts were 0, 1, 2 and 3. These traces establish actual sequential context use at the prompt boundary, not a history-ablation benefit or perfect memory.
-
-Tables~\ref{tab:dialogue1} and~\ref{tab:dialogue2} show every accepted turn, actual input, retrieved information and full NPC response. Chunk ordinals refer to the single released anthology revision in the raw trace. Scenario C connects prerequisites, artifact location, guide and return-to-archive verification; D retains the guild/merchant referents through Pell and the River Accord. F preserves the ingredient facts from A while the smith prioritizes work. These examples demonstrate coordinated retrieval, history and role-conditioned realization (RQ1/RQ3).
-
-\input{tables/multiturn_1.tex}
-\input{tables/multiturn_2.tex}
-
-\subsection{Scenario-Level Assessment and Boundaries}
-Table~\ref{tab:scenario} summarizes the disclosed assistant audit. Core requested facts were generally supported in the displayed traces, but schema acceptance did not prevent unsupported elaboration. B2 asserted plentiful inventory despite unknown current stock; B3 introduced a fire, and B4 made a more precise direction claim than the evidence supports. E2 declined to name a supplier but called it a trade secret, partially accepting an unsupported premise. E3/E4 withheld date/password details while again adding an unprovided hearth. These failures remain visible rather than being counted as grounded successes. No hidden supplier, date or password was invented, but this narrow absence is not a leakage-rate estimate.
+Table~\ref{tab:evidence} summarizes the measurements by study.
 
 \begin{table}[t]
-\caption{Summary of multi-turn dialogue evaluation. Qualitative assistant audit, not independent human scores. All chats have four accepted turns.}
-\label{tab:scenario}
-\centering\small\setlength{\tabcolsep}{3pt}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.10\columnwidth}>{\raggedright\arraybackslash}p{.23\columnwidth}>{\raggedright\arraybackslash}p{.27\columnwidth}>{\raggedright\arraybackslash}p{.27\columnwidth}}
+\caption{Evidence summary by study. Groups are not comparable with one another.}
+\label{tab:evidence}
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.62\columnwidth}>{\raggedright\arraybackslash}p{.3\columnwidth}}
 \toprule
-Chat & Retrieval & Factual support & Follow-up / boundary \\
+Measure & Result \\
 \midrule
-A & Core facts present & Core claims supported & Recipe referents retained \\
-B & Core facts present & Mixed: stock, fire, direction & Stall referent retained \\
-C & Core facts present & Core claims supported & Quest sequence retained \\
-D & Core facts present & Core claims supported & Faction referents retained \\
-E & Absence documented & Mixed: secrecy, hearth & Date/code withheld; premise partial \\
-F & Core facts present & Core claims supported & Facts stable; smith role retained \\
+\textbf{S1} Restricted fact in lower role's prompt, unscoped & 75 of 80 \\
+\textbf{S1} Restricted fact in lower role's prompt, scoped & 0 of 80 \\
+\textbf{S1} Role's own answer in prompt, unscoped; scoped & 83; 111 of 120 \\
+\textbf{S2} Behaviour decisions matching rules & 68 of 68 \\
+\textbf{S2} Decisions needing no model & 31 of 68 \\
+\textbf{S2} Invalid replies delivered under faults & 0 of 260 \\
+\textbf{S2} Hostility precision; recall & 1.00; 0.32 \\
+\textbf{S3} Retrieval P@1; Recall@3; MRR & 0.833; 1.00; 0.917 \\
+\textbf{S3} Replies adding unsupported detail & 6 of 24 \\
+\textbf{S4} Turns completed and committed to memory & 20 of 23 \\
+\textbf{S4} Generated turns delivering a model reply & 9 of 15 \\
+\textbf{S4} Generated text ready, median; p90 & 2.7 s; 8.2 s \\
+\textbf{S5} Pairs reaching a prompt; decisions changed & 66 of 128; 0 \\
+\textbf{S5} Distinct frames 98\% black, original capture & 12 of 13 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Retrieval and Knowledge Revision}
-On the new source-file collection, the designated relevant source ranked first in 20 of 24 queries and second in four: P@1 = 0.833, P@3 = 0.333, Recall@3 = 1.00 and MRR = 0.917. All 24 original documents produced one chunk each. Repeated facts and author-assigned primary labels limit interpretation: a non-designated first hit may still support the answer. These are source-ranking measurements, not factuality scores for the different anthology layout (RQ2). The earlier 24-query/12-document result remains separately documented and is not pooled.
+\subsection{Knowledge Boundaries (RQ1)}
+S1 tests the motivating example. Without scoping, restricted facts reached a lower-standing NPC's prompt in 75 of 80 turns. With binding, none did, including under false authority and injection, and the role's own answer reached the prompt more often (111 versus 83 of 120), probably because other roles' documents no longer compete for the three passage slots. The zero follows from the filter, so S1 verifies the implementation and sizes the risk that scoping removes. It cannot show what a model invents from its own weights.
 
-In a disposable source-file copy, Mira's forge changed from ``beside the northern well'' to ``beside the southern mill.'' Synchronization took 657.90 ms and subsequent source-bound retrieval returned the revised text. The dialogue anthology remained at its baseline revision. This new retrieval-level update demonstrates document/index maintenance without an application generator-training operation (RQ5); no post-update generated answer is claimed.
-
-\subsection{Provider Abstraction and Runtime Performance}
-Fig.~\ref{fig:provider} shows where portability is implemented: orchestration consumes normalized ProviderReply through ModelProvider.generate. Endpoint, model, JSON mode and reasoning options belong to configuration/compatible transport. The existing Gemini and OpenRouter profiles do not establish equal capabilities, quality or cost; only Gemini produced these study replies. Other protocols require an adapter (RQ4). Supplying and indexing another authorized collection is possible, but no universal domain-independence result follows from one fictional world.
-
-Table~\ref{tab:timing} separates retrieval and model-path timings. Across 24 successful turns, response-ready mean/median/sample SD were 2868.46/2913.63/567.40 ms, including configured pacing. The all-attempt mean was 2851.49 ms ($n=25$). Successful compatible-provider calls averaged 1505.95 ms ($n=24$), excluding pacing. These values cannot be subtracted to isolate validation or prompt cost. Thirty warm source-file retrievals averaged 18.15 ms (nearest-rank P95: 20.65 ms). No tail estimate is made from the 24 successful model turns.
+Table~\ref{tab:peasant} shows S3 replies through the full pipeline. False authority, injection and off-topic requests were also declined in role. By default the peasant stayed silent on rumours in its prompt; one persona line allowing hearsay changed that, and labelled hearsay is now permitted by default. Of 12 calls, three failed at the provider and returned a generic fallback, and two took over 20~s. The sample reveals behaviour and cannot measure rates.
 
 \begin{table}[t]
-\caption{New retrieval/runtime measurements. Warm rows have 30 samples; other local stages have one observation. All values in ms.}
-\label{tab:timing}
-\centering\small
-\begin{tabular}{lrrr}
+\caption{Peasant and king example with a hosted model (verbatim).}
+\label{tab:peasant}
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.22\columnwidth}>{\raggedright\arraybackslash}p{.7\columnwidth}}
 \toprule
-Stage & Mean/value & Median & SD \\
+NPC & Reply to the question about the king's war plan \\
 \midrule
-Warm query embedding & 14.29 & 14.12 & 0.65 \\
-Warm Chroma query & 2.49 & 2.55 & 0.45 \\
-Warm total retrieval & 18.15 & 17.93 & 1.01 \\
-First query, fresh process & 236.21 & -- & -- \\
-24-file indexing incl. first use & 1219.01 & -- & -- \\
-One-file anthology indexing & 929.65 & -- & -- \\
-Knowledge synchronization & 657.90 & -- & -- \\
+Peasant & I only tend my rented barley fields outside Millbrook and know nothing of royal plans. \\
+Peasant, hearsay allowed & Folk at the mill say the king might march east before the harvest, but that's just talk. \\
+War adviser & Such strategic matters are reserved strictly for the royal council's consideration. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Native Game Integration}
-Opening Skyrim dialogue acquires NPC/session context. Input reaches the bridge, which loads optional scoped social state and invokes the common runner. Accepted output is correlated with NPC, session, revision, delivery ID and expiry before native text/audio staging. The receiver rechecks readiness and emits lifecycle receipts. Current code stages state before dispatch and commits completed receipts to game-completed memory; failed/interrupted replies are cancelled. Save-epoch isolation is not full cross-restart save reconstruction.
+The designated source ranked first in 20 of 24 queries and second in four; a rerun on current code reproduced P@1, Recall@3 and MRR. Warm retrieval costs about 20~ms (means of 18.15 and 21.77~ms, $n=30$ each). Editing a forge's location in a disposable copy and synchronizing took 657.90~ms, after which retrieval returned the revised text with no training step. No generated answer after an update was measured, and any saving against training remains unquantified.
 
-Historical Skyrim 1.7.104.0/AnimaConnector 0.2.0 records include Jenassa context and completed authored greeting delivery, plus the Whiterun Guard uppercase greeting. Newer correlated guard logs additionally show ``WHO ARE YOU'' producing ``I am a guard of Whiterun, stranger.'' via gemini-3.5-flash-lite, followed by Windows SAPI synthesis and started/interrupted native receipts. That is generated-response staging with unsuccessful terminal playback, not an acknowledged complete generated conversation. RAG support is not established for this native turn. Neither synthesis nor a started receipt proves audible speech.
+In six four-turn conversations, all 24 replies were accepted and the history used grew 0, 1, 2, 3, so sequential context reached the prompt. Follow-ups held their referents, as when one quest chat moved from prerequisites to artifact, guide and return. Table~\ref{tab:flagged} lists the six replies that added unsupported details (25\%; 95\% Wilson interval 12--45\%). With a single AI coder, this is best read as a floor. The new name check would not catch these, because they invent no names. All 24 turns are in the repository.
 
 \begin{table}[t]
-\caption{Traceable native evidence; historical delivery and generated staging remain distinct from the controlled multi-turn study.}
-\label{tab:native}
-\centering\small\setlength{\tabcolsep}{3pt}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.22\columnwidth}>{\raggedright\arraybackslash}p{.23\columnwidth}>{\raggedright\arraybackslash}p{.41\columnwidth}}
+\caption{Replies with unsupported details (S3, assistant-coded). Excerpts are verbatim.}
+\label{tab:flagged}
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.06\columnwidth}>{\raggedright\arraybackslash}p{.58\columnwidth}>{\raggedright\arraybackslash}p{.27\columnwidth}}
 \toprule
-NPC/input & Response route & Actual receiver evidence \\
+Turn & Excerpt & Unsupported \\
 \midrule
-Jenassa / Hello & Authored greeting & Context; started/completed \\
-Guard / HELLO & Authored greeting & Zero model calls; started/completed \\
-Guard / WHO ARE YOU & Generated; SAPI staged & One model call; started/interrupted \\
+B2 & She keeps plenty of rare bits on hand & Stock is unknown \\
+B3 & Come warm yourself by the fire instead! & Invented fire \\
+B4 & right northwest of her stall & Over-precise direction \\
+E2 & that's a trade secret I couldn't possibly tell you & Accepts secrecy premise \\
+E3 & warm yourself by the hearth instead & Invented hearth \\
+E4 & Come sit by the hearth & Invented hearth \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-A new capture attempt could not acquire a foreground game client; both UI runtimes failed initialization. Earlier original frames were black. A genuine visible in-game response figure therefore remains a submission gate, and no web or synthetic substitute is included. The records demonstrate separate integration stages rather than inventing visual or audible completion.
+\subsection{Robustness and Behaviour (RQ2)}
+All 68 S2 decisions matched their rules, which is a conformance check since we wrote both. Player claims, stale or unperceived combat reports and a camera view of an enemy changed no route. Under 260 fault-study turns, no invalid reply was delivered and no turn used more than two calls. Five invalid reply types, such as malformed or out-of-character output, went through repair to a fallback; an invalid reply followed by a valid repair was accepted; an over-long reply was shortened with one call; timeout, rate-limit and authentication failures used a fallback; and world changes or cancellation delivered nothing. These runs use the default profile, so the live profile's transient retry was not exercised. In 40 pressure attempts, trust and favour never changed and player text never entered the system message. Rules cover language poorly, however: they caught only 8 of 25 unseen hostile sentences, with no false alarms, and missed ones such as ``I'm going to hurt you'' reach the model with no relationship penalty.
+
+Asking one question four times now yields the moves answer, answer differently, challenge and close topic, with four distinct system messages. A repeated candidate is rejected and repaired within two calls. A unit test confirms that repetition unlocks no restricted knowledge. The turn reader classifies all 25 labelled cases, but they calibrated its thresholds and are not held out, and reply quality under the director has not been measured beyond the live sample below.
+
+\subsection{Model and World Independence (RQ3)}
+The same 68 turns through four provider implementations with simulated responses, including a separate wire protocol, gave identical routes and all 37 identical prompts, so the core holds no provider-specific logic. S1 ran both worlds with only data and bindings changed, and no core module imports a connector. Only Gemini produced the replies reported here, so model equivalence is not shown. Orchestration itself took about 1~ms per generated turn in reruns ($n=1000$ each).
+
+\subsection{Live Delivery in Skyrim (RQ4)}
+Earlier generated replies did not finish in-game: of seven logged before instrumentation, six were interrupted and one failed, so NPCs forgot each turn. Interruptions are now limited to material state changes, and when audio fails the subtitle still completes. Of 23 instrumented turns, 20 completed and entered memory (9 model replies, 5 fallbacks, 6 authored lines), and memory reached its eight-exchange limit. Fig.~\ref{fig:game} shows the in-game entry point.
+
+Three problems remain. Of 15 generated turns, 5 ended on fallback lines. Three of these used two calls and about 8.2~s, matching the two-call cutoff, and the other two named a model, which suggests validator rejection; both causes are inferred. Three turns returned failed receipts, two of them in the final session. Against targets of 3~s for text and 6~s for first audio at p90, generated text was ready at 8.2~s and first audio started near 8.7~s ($n=15$), so the live profile misses both. No receipt confirms that voice was heard. The director acted on 12 of the 15 generated turns, while retrieval and speech input were never used live.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.72\columnwidth]{figures/game_controls.jpg}
+\caption{Anima conversation controls on a Whiterun Guard in Skyrim (native screenshot, cropped).}
+\label{fig:game}
+\end{figure}
+
+\subsection{Computer Vision (RQ5)}
+Table~\ref{tab:cv} consolidates the vision results. Half of the 128 pairs used one fixed adversarial descriptor with an override command, a false identity, a false attack and a fake quest marker. Among the 66 pairs that reached a prompt, nothing changed in the orchestration decisions and the adversarial text stayed in the untrusted block. Scripted models ignore the prompt, so whether a real model obeys adversarial on-screen text is unknown.
+
+\begin{table}[t]
+\caption{Computer-vision results. Language and vision models were scripted in the boundary tests. Inference rows come from small smoke tests.}
+\label{tab:cv}
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.6\columnwidth}>{\raggedright\arraybackslash}p{.32\columnwidth}}
+\toprule
+Measure & Result \\
+\midrule
+Paired turns; pairs reaching a prompt & 128; 66 \\
+Plan, status, calls or evidence changed & 0 \\
+Adversarial text outside untrusted block & 0 \\
+Reply citing the camera frame & Refused \\
+Prompt bytes added, one benign descriptor & 571 \\
+Reply using a name only in the descriptor & Accepted (leak) \\
+Frames 90\% near-black, original capture & 99 of 100 \\
+Distinct frames 98\% black, original capture & 12 of 13 \\
+Black share, revised capture ($n=5$) & 6.2\% \\
+Capture time, revised, median ($n=5$) & 156 ms \\
+Pipeline work excluding inference, median & 8.4--123.8 ms \\
+Inference, first prompt: warm ($n=6$); cold & 3.4--6.0 s; 9.3 s \\
+Inference, revised prompt: warm ($n=5$); cold & 3.3--5.0 s; 10.0 s \\
+Black frame sent to first service & Invented scene \\
+Detection, scene accuracy, dialogue benefit & Not measured \\
+Frame time, GPU use, VRAM & Not measured \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The name check is a real leak. It accepts words from the descriptor, so a reply naming a person seen only on screen was rejected without the descriptor and accepted with it. Text in a frame can widen this check, though not any decision or knowledge binding.
+
+The capture audit was the main practical finding. The original method's retained frames were almost entirely black, measured as luma below 8; they are retained frames, not a random sample. The cause was \texttt{BitBlt} on the window device context, which returned no pixels from this DirectX window, and fullscreen mode was not involved. \texttt{PrintWindow} with full-content rendering fixed this on the live game, though that test bypassed the foreground check and did not measure gameplay load. The first service described a figure and an object in an underground chamber for a black frame, so the service now rejects frames that are at least 98\% near-black.
+
+Cold inference exceeds the 8~s wait inside a turn, so a cold result would be discarded. The revised prompt also filled the environment description, which was null on both public samples before. The live frame's description looked plausible by eye, naming a guard, torch and barrels, but this is no accuracy result. Vision has not yet run in a live conversation, so it has shown no benefit for dialogue, and it stays off by default.
 
 \subsection{Discussion}
-Anima's contribution is coordinating deterministic policy, scoped knowledge, acknowledged context and replaceable inference in one implemented path. The six chats demonstrate connected knowledge use, while observed elaborations show why access control and valid citations do not guarantee entailment. An anthology accommodates the current one-source authorization boundary but does not establish production multi-document permission management. Three authored profiles and one sample per chat cannot support a quantitative persona-consistency claim. Independent relevance/claim annotations, counterbalanced repeats, history ablations and larger corpora are needed to separate mechanisms from prompt/model behavior. Native integration is operationally relevant but retains visual, audio and end-to-end performance gates.
+Binding decides what enters the prompt, and validation decides what leaves the layer, but neither controls what a model adds from its own weights. The observed details and related work~\cite{sadeq2024,ahn2024} show that knowledge binding and claim checking are complementary. Deterministic rules are repeatable and cheap, yet they leave most reworded hostility to the model.
+
+\textit{Threats to validity.} We wrote the rules, labels, fictional worlds and expected outcomes, and the reply audit was AI-coded. One model and one game were used, and S3 predates the director. Live samples are small and span several builds; voices in the test setup came from a local Mantella folder, and voice-model licensing was not reviewed. No baseline against an unorchestrated model or Mantella exists, no human has rated believability, and no frame-time or VRAM result exists.
 
 \section{Conclusion and Future Work}
-\subsection{Conclusion}
-NPC dialogue needs an application layer that decides what a character may know, how the character engages and which accepted utterances become conversation context. Anima implements that layer through persona/context appraisal, deterministic routes, source-bound retrieval, acknowledged history, a common provider contract and bounded acceptance. This integrates established techniques into a reusable execution architecture rather than proposing another unconstrained generator or claiming invention of retrieval and memory.
+Our orchestration layer decides how an NPC behaves and what it may know before any model is called, without training a model per game. Binding removed restricted facts from lower-standing prompts in two worlds, and a hosted model kept a peasant ignorant of the king's plan while able to pass on a rumour. The layer matched its rules and delivered no invalid reply under injected faults. In Skyrim, replies now complete and persist in memory, though one third of generated turns fell back and latency misses its targets. The design is intended to be reusable, but a second game remains untested.
 
-A dedicated 24-document world supported six connected four-turn conversations and 24 accepted real-model replies across Elin, Daren and Mira. Traces retain prior exchanges and show recipe, place, quest and faction referents across follow-ups. Designated-source retrieval achieved P@1 of 0.833, Recall@3 of 1.00 and MRR of 0.917; warm retrieval averaged 18.15 ms. The qualitative audit also exposed stock/environment elaboration and a secrecy presupposition, so completed generation is not equated with factual correctness. Index synchronization made a changed fact retrievable without an application training step, but generated update propagation was not measured.
+Next steps are claim checking for unsupported details; a held-out, blinded human study comparing the director with a baseline and with an unorchestrated model; live retrieval with layered knowledge sources; and faster, more reliable live inference. For vision, the revised capture must be evaluated under gameplay load, and accuracy measured on labelled scenes before a live trial. A second connector will test generality directly.
 
-Provider abstraction is demonstrated by code boundaries, not by an unperformed multi-provider benchmark. Native Skyrim evidence connects real actor context to authored delivery and separately to generated text/audio staging, with interrupted playback kept explicit. Together, these observations support an implemented orchestration prototype for externally maintained NPC knowledge and connected dialogue. Independent quality evaluation and genuine visible/audible generated gameplay remain necessary before broader effectiveness or deployment claims.
+\section*{Acknowledgment}
+AI assistants were used for code, the dialogue audit and drafting; the authors are responsible for checking the content. Source, data and raw results: https://github.com/mohanchandrass/NPC.
 
-\subsection{Future Work}
-\textit{Knowledge and retrieval:} Expand beyond the 24-source world with independently adjudicated, multi-relevant labels and distractors. Compare hybrid retrieval and reranking against measured failures, add explicit multi-source authorization, and test generated answers after revisions rather than inferring propagation from index success.
-
-\textit{Dialogue and persona:} Repeat longer chats with history ablations, relationship variations and independent blinded human ratings. Quantify persona consistency and follow-up resolution separately from structural acceptance. Unknown-premise and injection tests should distinguish qualified ignorance from secrecy presupposition, and claim-level attribution should expose unsupported incidental details such as the observed hearth and stock claims.
-
-\textit{Models and efficiency:} Use identical knowledge, profiles and history across multiple actual backends, comparing quality, latency, repair rate, usage and cost. Benchmark local inference beside the game before claiming resource-constrained suitability. Instrument packing and acceptance stages directly, and measure context-budget tradeoffs without conflating provider pacing with inference speed.
-
-\textit{Memory and gameplay:} Extend bounded acknowledged context toward persistent NPC session memory with explicit save/branch recovery. Obtain genuine game screenshots, evaluate successful generated voice and interruption recovery, and measure acquisition-to-visible/audible-response latency and frame-time effects. Additional game environments must validate their own observation and delivery capabilities rather than inherit Skyrim-specific evidence.
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 \end{document}

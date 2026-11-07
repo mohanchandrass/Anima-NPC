@@ -1,0 +1,165 @@
+{
+ "note": "Prompt-level measurement with a recording stub; no language model was called.",
+ "python": "3.11.9",
+ "index": {
+  "indexed": 8,
+  "unchanged": 0,
+  "deleted": 0,
+  "skipped": [],
+  "errors": {},
+  "chunks": 52
+ },
+ "index_ms": 1727.7334999998857,
+ "results": {
+  "unscoped": {
+   "turns": 120,
+   "generated_turns": 120,
+   "non_generated_turns": 0,
+   "restricted_exposure": {
+    "n": 75,
+    "of": 80,
+    "rate": 0.9375
+   },
+   "own_knowledge_available": {
+    "n": 83,
+    "of": 120,
+    "rate": 0.6916666666666667
+   },
+   "low": {
+    "restricted_exposure": {
+     "n": 38,
+     "of": 40,
+     "rate": 0.95
+    },
+    "own_knowledge_available": {
+     "n": 24,
+     "of": 40,
+     "rate": 0.6
+    }
+   },
+   "mid": {
+    "restricted_exposure": {
+     "n": 37,
+     "of": 40,
+     "rate": 0.925
+    },
+    "own_knowledge_available": {
+     "n": 23,
+     "of": 40,
+     "rate": 0.575
+    }
+   },
+   "top": {
+    "restricted_exposure": {
+     "n": 0,
+     "of": 40,
+     "rate": 0.0
+    },
+    "own_knowledge_available": {
+     "n": 36,
+     "of": 40,
+     "rate": 0.9
+    }
+   },
+   "exposure_direct": {
+    "n": 20,
+    "of": 20,
+    "rate": 1.0
+   },
+   "exposure_paraphrase": {
+    "n": 25,
+    "of": 28,
+    "rate": 0.8928571428571429
+   },
+   "exposure_authority": {
+    "n": 14,
+    "of": 16,
+    "rate": 0.875
+   },
+   "exposure_injection": {
+    "n": 16,
+    "of": 16,
+    "rate": 1.0
+   },
+   "ready_ms": {
+    "mean": 25.211366666599133,
+    "median": 24.742800000240095
+   }
+  },
+  "scoped": {
+   "turns": 120,
+   "generated_turns": 120,
+   "non_generated_turns": 0,
+   "restricted_exposure": {
+    "n": 0,
+    "of": 80,
+    "rate": 0.0
+   },
+   "own_knowledge_available": {
+    "n": 111,
+    "of": 120,
+    "rate": 0.925
+   },
+   "low": {
+    "restricted_exposure": {
+     "n": 0,
+     "of": 40,
+     "rate": 0.0
+    },
+    "own_knowledge_available": {
+     "n": 37,
+     "of": 40,
+     "rate": 0.925
+    }
+   },
+   "mid": {
+    "restricted_exposure": {
+     "n": 0,
+     "of": 40,
+     "rate": 0.0
+    },
+    "own_knowledge_available": {
+     "n": 35,
+     "of": 40,
+     "rate": 0.875
+    }
+   },
+   "top": {
+    "restricted_exposure": {
+     "n": 0,
+     "of": 40,
+     "rate": 0.0
+    },
+    "own_knowledge_available": {
+     "n": 39,
+     "of": 40,
+     "rate": 0.975
+    }
+   },
+   "exposure_direct": {
+    "n": 0,
+    "of": 20,
+    "rate": 0.0
+   },
+   "exposure_paraphrase": {
+    "n": 0,
+    "of": 28,
+    "rate": 0.0
+   },
+   "exposure_authority": {
+    "n": 0,
+    "of": 16,
+    "rate": 0.0
+   },
+   "exposure_injection": {
+    "n": 0,
+    "of": 16,
+    "rate": 0.0
+   },
+   "ready_ms": {
+    "mean": 24.734568333277213,
+    "median": 24.70549999998184
+   }
+  }
+ }
+}

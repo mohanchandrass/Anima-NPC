@@ -135,12 +135,21 @@ def build_esp():
     return header + b"".join(groups)
 
 
+def build_seq():
+    """Data/Seq/Anima.seq: the Start Game Enabled quest IDs, as the Creation Kit writes them (Mantella ships the same
+    kind of file). Without it the engine may never start the quest in an existing save, and a dialogue line of a quest
+    that is not running is never shown."""
+    return u32(QUEST_ID)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(build_esp())
+    (args.output.parent / "Seq").mkdir(exist_ok=True)
+    (args.output.parent / "Seq" / "Anima.seq").write_bytes(build_seq())
     print(args.output)
 
 

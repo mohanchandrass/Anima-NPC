@@ -2,16 +2,18 @@
 \input{diagram_styles.tex}
 \begin{document}
 \begin{tikzpicture}
-\node[engine,text width=7.7cm] (core) at (0,0) {Unchanged core: policy, context, retrieval, prompt, validation};
-\node[context,text width=7.7cm] (contract) at (0,-1.3) {\texttt{ModelProvider.generate(prompt, timeout)}\\Provider-neutral messages $\rightarrow$ typed ProviderReply};
-\node[external,text width=3.55cm] (http) at (-2.05,-3.2) {Chat-completions HTTP transport\\Endpoint / model profile\\JSON + reasoning options\\Gemini: evaluated\\OpenRouter: profile available};
-\node[storage,text width=3.55cm] (fake) at (2.05,-3.2) {OfflineProvider\\Scripted test double\\Not a language-model comparison};
-\node[external,text width=7.7cm] (normal) at (0,-5.4) {Normalize text, finish reason, usage and model identity\\Return candidate for core acceptance (no provider-owned policy)};
+\node[engine,text width=7.6cm] (core) at (0,4.3) {Unchanged core: policy, context, retrieval, prompt, validation};
+\node[context,text width=7.6cm] (contract) at (0,3) {\texttt{ModelProvider.generate(prompt, timeout)}\\Provider-neutral messages; typed reply};
+\node[external,text width=2.2cm] (http) at (-2.75,1.35) {Compatible endpoint\\Profile only};
+\node[external,optional,text width=2.2cm] (native) at (0,1.35) {Other protocol\\One new class};
+\node[storage,text width=2.2cm] (stub) at (2.75,1.35) {Offline double\\Tests only};
+\node[external,text width=7.6cm] (reply) at (0,-.1) {ProviderReply: text, finish reason, usage, model identity};
 \draw[flow] (core) -- (contract);
-\draw[control] (contract.south) -- ++(0,-.2) -| (http.north);
-\draw[control] (contract.south) -- ++(0,-.2) -| (fake.north);
-\draw[flow] (http) -- (http|-normal.north);
-\draw[flow] (fake) -- (fake|-normal.north);
-\node[edgelabel] at (0,-6.4) {Incompatible APIs need a new adapter; capabilities still vary by model.};
+\draw[flow] (http.north |- contract.south) -- (http);
+\draw[flow] (contract) -- (native);
+\draw[flow] (stub.north |- contract.south) -- (stub);
+\draw[flow] (http) -- (http.south |- reply.north);
+\draw[flow] (native) -- (reply);
+\draw[flow] (stub) -- (stub.south |- reply.north);
 \end{tikzpicture}
 \end{document}

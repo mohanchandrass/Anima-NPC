@@ -21,6 +21,22 @@ async def test_vlm_request_bounds_and_normalization():
 
 
 @pytest.mark.asyncio
+async def test_prompt_shows_the_exact_descriptor_shape():
+    # "environment (object: description, ...)" led the live model to return a key called "object",
+    # which the descriptor dropped, leaving environment.description empty.
+    sent = []
+    def respond(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"response": "{}"})
+    await OllamaVLM("http://localhost:11434", "fake", 2, transport=httpx.MockTransport(respond)).analyze(Image.new("RGB", (2, 2)), [])
+    prompt = sent[0]["prompt"]
+    assert '"environment": {"description":' in prompt and "(object:" not in prompt
+    for key in ("location_guess", "visible_conditions", "characters", "confidence_or_certainty", "objects", "player_actions",
+                "spatial_relationships", "events", "uncertainties"):
+        assert f'"{key}"' in prompt
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("response,expected", [
     (httpx.Response(200, content=b"bad json"), VLMValidationError),
     (httpx.Response(200, json={"response": "[]"}), VLMValidationError),

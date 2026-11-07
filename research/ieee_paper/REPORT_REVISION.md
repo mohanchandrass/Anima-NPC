@@ -1,3 +1,27 @@
+# Submission rewrite - 2026-11-06
+
+Goal from the owner: a clean 6 to 8 page paper that leads with the generalized orchestration layer, the peasant and king example and avoiding custom model training, with strong diagrams, few tables and no filler. Result: 7 pages, 6 figures, 3 tables. No API, game or CV-enabled run was made for this revision. CV stays off.
+
+Removed from the page, kept in the repository: the full 24-turn dialogue tables (`tables/multiturn_*.tex`, `experiments/raw_results/multiturn_dialogue.json`). Unused figure source kept: `figure_sources/knowledge_ingestion.tex`.
+
+New headline evidence: the knowledge-scope study, rerun into `experiments/raw_results/knowledge_scope_rerun.json`. Other evidence files:
+
+| File | Content |
+|---|---|
+| `current_system_study.json` | Director conformance, 128 paired descriptor turns (66 reached a prompt), name-check leak, CV service overhead with a mocked endpoint |
+| `orchestration_rerun.json` | Behaviour, faults and provider swap on the working tree. `too_long` shows `passed: false` only because the CS3235 study still expects the older outcome |
+| `skyrim_live_audit.json` | First 354 log lines, 23 timed turns, without player text, reply text or session IDs |
+| `cv_capture_audit.json` | Hashes and pixel statistics for 100 frames from the original BitBlt capture, none of the frames themselves |
+| `cv_smoke_2026-11-06.json` | Reduced smoke-test output from a separate session, before and after the capture and prompt fixes, plus reported capture figures; not an accuracy study |
+| `reruns_2026-11-06.json` | Retrieval rerun, written by a separate session; its P@1, Recall@3 and MRR match a run by this session |
+
+An independent reviewer session raised the following. Each was checked against code or data before use.
+
+- Applied: vision reaches the name check as well as the prompt (reworded and measured; code unchanged, a decision for the owner). Over-long replies are now shortened. Pairs reaching a prompt are stated. The live result separates 9 model replies from fallbacks and authored lines. Latency uses the documented p90 targets. Fallback causes are labelled as inferred. Capture is on by default and has a third trigger. Schema wording is softened. Figures redrawn.
+- Open, needs the owner: the code was not committed, so results describe the 6 Nov working tree on top of `2e04990`, which other sessions were still changing. To cite a clean hash, commit, then rerun the offline studies. The title's claims were left as approved, though the reviewer considers them strong. The CS3235 figures and its `too_long` table row were not changed.
+
+Self-review of this rewrite, not independent. The Word file was checked by structure and a browser previewer that does not lay out continuous sections, not in Microsoft Word.
+
 # Research report expansion - 2026-11-03
 
 Scope: report-only work while another worker repairs the system. No runtime, adapter, game installation, provider configuration or teammate code was changed. Previous manuscript/PDF/source ZIP retained locally under tmp/pdfs/report-expansion-original/. No new provider calls, live game actions or screenshot captures were performed in this revision.

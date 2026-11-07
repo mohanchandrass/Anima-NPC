@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.detection.yolo_detector import YoloDetector, DetectorUnavailableError
 from app.perception.pipeline import PerceptionPipeline, PipelineError
-from app.services.image_service import ImageValidationError, validate_image
+from app.services.image_service import BlankFrameError, ImageValidationError, is_blank_frame, validate_image
 from app.vision.ollama_vlm import OllamaVLM
 
 router = APIRouter()
@@ -28,8 +28,12 @@ async def analyze(request: Request, image: UploadFile = File(...)):
         preprocessing_start = time.perf_counter()
         data = await image.read(settings.max_upload_bytes + 1)
         validated = validate_image(data, image.content_type, settings.max_upload_bytes, settings.max_image_dimension)
+        if is_blank_frame(validated.image):
+            raise BlankFrameError("Frame is effectively black; no scene was analyzed.")
         result = await pipeline(request).analyze(validated, (time.perf_counter() - preprocessing_start) * 1000)
         return result
+    except BlankFrameError as exc:
+        raise HTTPException(422, detail={"code": "BLANK_FRAME", "message": str(exc)}) from exc
     except ImageValidationError as exc:
         raise HTTPException(422, detail={"code": "INVALID_IMAGE", "message": str(exc)}) from exc
     except DetectorUnavailableError as exc:

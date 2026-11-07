@@ -1,6 +1,7 @@
 """Bounded response-ready preview, without persistence or game delivery."""
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Callable
@@ -17,6 +18,7 @@ from npc.contracts.dialogue import CurrentState, ProviderReply, ResponseBody, Tu
 from npc.generation.prompt import PromptTooLarge, build_prompt
 from npc.generation.provider import ModelProvider, ProviderFailure
 from npc.validation import validate_response
+from npc.validation.response import LENGTH_CODES, shorten_text
 from npc.vision import VisualContext
 
 
@@ -130,6 +132,26 @@ class PreviewRunner:
 
     def _timing_profile(self):
         return "realtime" if (self.limits.response_timeout_ms, self.limits.model_cutoff_ms) == (3000, 2450) else "development"
+
+    def _shorten(self, reply, situation, plan, prompt, state, validation):
+        """A reply whose only fault is length is shortened at a sentence boundary and validated again. No extra model call."""
+        if plan.route != "generate" or not validation.violations or not set(validation.violations) <= LENGTH_CODES:
+            return None
+        try:
+            data = json.loads(reply.content)
+            text = data["text"]
+            if data.get("mode") != "speech" or not isinstance(text, str):
+                return None
+        except (ValueError, KeyError, TypeError):
+            return None
+        shorter = shorten_text(text, plan.max_words, plan.max_sentences)
+        if not shorter or shorter == text:
+            return None
+        fixed = ProviderReply(content=json.dumps({**data, "text": shorter}), model=reply.model, finish_reason=reply.finish_reason,
+                              input_tokens=reply.input_tokens, output_tokens=reply.output_tokens)
+        result = validate_response(fixed, situation, plan, state, evidence=prompt.evidence, evidence_aliases=prompt.evidence_aliases,
+                                   name_allowlist=self.name_allowlist)
+        return result if result.accepted else None
 
     async def _run(self, scenario: ContextScenario, *, cancellation: asyncio.Event | None = None,
                    current_state: Callable[[], CurrentState] | None = None, visual_context: VisualContext | None = None) -> TurnPreview:
@@ -258,6 +280,9 @@ class PreviewRunner:
                     return fallback("model_cutoff")
                 calls += 1
                 limit = remaining if self.limits.provider_attempt_ms is None else min(remaining, self.limits.provider_attempt_ms / 1000)
+                note = getattr(self.provider, "note", None)  # optional: a logging wrapper learns what the prompt cannot say
+                if callable(note):
+                    note(turn_type=reading.type, move=plan.move, attempt=attempt + 1, scene_items=len(situation.scene))
                 began = self.clock()
                 try:
                     async with timed("repair" if attempt else "generation"):
@@ -297,5 +322,9 @@ class PreviewRunner:
                     return finish("repair_success" if attempt and violations else "model_success", validation.response)
                 if "stale_state" in validation.violations:
                     return finish("cancelled", error="stale_state")
+                softened = self._shorten(reply, situation, plan, prompt, current_state(), validation)
+                if softened is not None:
+                    # Only the length was wrong: keep the whole leading sentences instead of discarding a good reply.
+                    return finish("repair_success", softened.response)
             return fallback("irrelevant_boundary" if "irrelevant_boundary" in violations else "invalid_candidate")
         raise AssertionError("unreachable")

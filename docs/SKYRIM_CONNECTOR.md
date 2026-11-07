@@ -29,7 +29,13 @@ At load the plugin checks `http://127.0.0.1:<Port>/v1/health` on a background th
 
 With no session and no menu open, pressing `ChatKey` (F6) or holding F8 while the crosshair is on a living, non-hostile actor within about 600 units starts a menu-less session with that actor (F6 then opens the text box; F8 records). With no valid target F6 keeps the "talk to an NPC first" message. The session ends when the actor is more than about 600 units away, in combat or dead, when the cell changes, when the text box is closed or submitted empty, or after 60 s with nothing pending. Vanilla `MenuTopicManager` speaker checks are not applied to it; sessions started from the vanilla dialogue menu behave as before. Not verified live.
 
-### Start on activation, key diagnostics (plugin 0.5.4)
+### Delivery rules and captions (plugin 0.5.5)
+
+Menu sessions deliver only while the dialogue menu's selected speaker is the NPC and wait while the menu is speaking a vanilla topic. Direct (menu-less) sessions have no menu speaker, so that check is skipped (`EvaluateDialogue(..., menuSession=false)` in `delivery.h`); delivery waits while the actor itself speaks a vanilla line (`VanillaSpeaking`), and still rejects on combat, death, a changed speaker/revision or expiry. Every rejection logs `ANIMA delivery rejected:` with the mode and the inputs.
+
+Captions: before adding its `SubtitleManager` entry the plugin removes every entry of that speaker, re-adds its own up to 3 times if the engine drops it during the delivery, and logs subtitle counts (`ANIMA caption: ...`). With `CaptionFallback=1` (default, missing key means 1; set in `AnimaConnector.ini` `[Connection]`) the reply is also shown through `Debug.Notification` as at most two lines of about 70 characters; it is shown regardless when the entry cannot be confirmed. Not verified live.
+
+### Start on activation, key diagnostics (plugin 0.5.5)
 
 Many NPCs have no dialogue menu: E only plays a static bark. With `AutoStartOnActivate=1` (default; `0` disables; a missing key means 1, so older `AnimaConnector.ini` files keep working) the plugin listens for `TESActivateEvent`. When the player activates a living, non-hostile, non-combat actor within about 600 units that has no session and no `DialogueMenu` opens within 700 ms, it starts the same menu-less direct session as F6 and opens the text box (same end conditions: distance, combat, death, cell change, 60 s idle). If a dialogue menu opens, nothing changes: the vanilla menu session takes over. Doors, containers, items, the player and non-player activators are ignored. A pause or custom menu defers the start for up to 3 s. The NPC's bark is never stopped, and `SuppressVanillaSpeech` applies only once a session is active.
 
@@ -211,6 +217,30 @@ Set `pipeline_mode: "preview"` to compose the existing `PreviewRunner` and confi
 Run `run_cv.bat` in one terminal and `run_skyrim_connector.bat` in another. See [CV setup](../cv/SETUP.md) for the Ollama prerequisite; `GET http://127.0.0.1:8000/ready` checks the local model without downloading it. Leave `stt_url` null for automatic Whisper STT. Leave `tts_url` null for automatically prepared Chatterbox, or subtitle-only output before Chatterbox setup. Explicit external URLs are preserved. Submit text to `/v1/player-input` using the active session ID from `/v1/health`; validated output is returned through the plugin's command polling. The [integration tests](../tests/unit/adapters/test_skyrim_connector.py) exercise this path with deterministic inference and game boundaries.
 
 This composes the current canonical game-context subset. Production social memory and reliable heard-memory commits remain unimplemented for this best-effort native receiver. Console acknowledgements do not establish game delivery.
+
+## Reading the console
+
+The Anima window (`python -m npc.adapters.skyrim --console`) prints one line per event; the optional `--log-file` receives the same lines. Colours: input bold cyan, model input blue, model output green, CV magenta, warnings yellow, errors red, `[PLUGIN]` lines cyan. `--no-color` (or the `NO_COLOR` variable) turns colour off.
+
+| Event | Meaning |
+| --- | --- |
+| `BANNER component=...` | Start-up state of LLM (profile, model), STT, TTS (engine, folder, model count, audio mode), RAG, memory scope, CV and screenshots. |
+| `SESSION_OPEN`, `GAME_CONTEXT` | A conversation began: NPC name, race, voice type, first three factions, location, hour, weather, persona source (`authored`, `derived` from role rules, or `default_unknown`) and the chosen role. The voice actually used is the later `TTS_READY`. |
+| `PLAYER_INPUT` | What the player gave: `source` typed or speech, STT `confidence` and `transcript_ms` (n/a for typed), and the text. |
+| `MODEL_INPUT` | One per model call: NPC, persona source, turn type, move, attempt, message count, prompt bytes, evidence count, history count, scene items. |
+| `MODEL_OUTPUT` | The raw JSON the model returned (cut at 2048 characters), finish reason, input/output tokens and latency. A failed or abandoned call shows `status="failed"` or `"cancelled"` with an `error` code (red). |
+| `RETRIEVAL` | Knowledge status and the evidence ids used. |
+| `VALIDATION`, `REPAIR`, `FALLBACK` | Whether the reply was accepted or rejected and which violations fired; a second call after a violation; or the authored fallback line and why it was used. |
+| `PIPELINE_RESULT`, `OUTPUT_STAGED`, `TURN_TIMING`, `NATIVE_ACK` | Route and status, the reply that was staged, per-stage milliseconds, and the plugin's receipt. |
+| `SCREENSHOT` | Each capture: path, size, mean brightness and black fraction. `warning="mostly_black"` appears when more than 90% of sampled pixels are black (the hint: run Skyrim windowed or borderless, because GDI capture cannot read exclusive fullscreen). Brightness comes from a standard-library PNG sample, not an image library, and is skipped when `capture_screenshots` is false. |
+| `CV_REQUEST`, `CV_RESULT`, `CV_UNAVAILABLE` | A frame was sent to the CV service; the descriptor summary (environment, characters, objects, uncertainties, model, latency); or why CV could not answer. |
+| `CV_CONTEXT` | Per turn: `attached_to_prompt` (`attach_visual_reference` is true), `reference_only`, or `none` with the reason. |
+
+The raw prompt is never written by default. `--verbose` adds `MODEL_PROMPT` lines with each system and data message (cut at about 6000 characters) to both the console and the log file, so treat a verbose log file as holding dialogue and game state.
+
+### Turning CV on
+
+CV needs Ollama with the `qwen2.5vl:3b` model, the CV service started with `run_cv.bat`, and `"cv_url": "http://127.0.0.1:8000"` in `configs/skyrim/connector.json` (see [CV setup](../cv/SETUP.md)). The banner shows `disabled: cv_url not set`, `unreachable: <url>` or `ready: <model>`. Ollama is not installed on this development machine, so CV has not been run end to end here, and GDI screenshots from Skyrim are currently mostly black, so a descriptor from them would describe nothing useful until capture works in windowed or borderless mode.
 
 ## Guarantees and limits
 

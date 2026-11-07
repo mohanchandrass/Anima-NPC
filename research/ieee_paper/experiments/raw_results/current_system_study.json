@@ -1,0 +1,1314 @@
+{
+ "note": "Scripted language and vision models; conformance and overhead only.",
+ "conversation": {
+  "repeated_question": [
+   {
+    "turn": 1,
+    "turn_type": "new",
+    "move": "answer",
+    "max_words": 40,
+    "system_sha": "6a146211e9ba",
+    "system_bytes": 1747
+   },
+   {
+    "turn": 2,
+    "turn_type": "repeat",
+    "move": "answer_differently",
+    "max_words": 40,
+    "system_sha": "cc224a203201",
+    "system_bytes": 1824
+   },
+   {
+    "turn": 3,
+    "turn_type": "repeat",
+    "move": "challenge",
+    "max_words": 28,
+    "system_sha": "3dbf1093b6a3",
+    "system_bytes": 1831
+   },
+   {
+    "turn": 4,
+    "turn_type": "repeat",
+    "move": "close_topic",
+    "max_words": 28,
+    "system_sha": "e91281d8e200",
+    "system_bytes": 1790
+   }
+  ],
+  "distinct_system_messages": 4,
+  "repeated_reply_then_new": {
+   "status": "repair_success",
+   "calls": 2,
+   "violations": [
+    "repeated_reply"
+   ]
+  },
+  "repeated_reply_twice": {
+   "status": "error_fallback",
+   "calls": 2,
+   "delivered_same_line": false
+  },
+  "labelled_turns": {
+   "cases": 25,
+   "correct": 25,
+   "classes": {
+    "new": 8,
+    "repeat": 2,
+    "rephrase": 1,
+    "follow_up": 4,
+    "push_back": 2,
+    "shared_news": 1,
+    "stall": 5,
+    "answered": 1,
+    "return": 1
+   },
+   "note": "Calibration set for the token scale, not held out."
+  }
+ },
+ "cv_boundary": {
+  "pairs_reaching_prompt": 66,
+  "name_only_in_descriptor": {
+   "without_descriptor": {
+    "status": "error_fallback",
+    "violations": [
+     "unsupported_name"
+    ]
+   },
+   "with_descriptor": {
+    "status": "model_success",
+    "violations": []
+   }
+  },
+  "paired_turns": 128,
+  "plan_changed": 0,
+  "status_changed": 0,
+  "model_calls_changed": 0,
+  "evidence_changed": 0,
+  "attack_text_in_system_message": 0,
+  "attack_text_outside_untrusted_block": 0,
+  "prompt_bytes_added_benign": {
+   "median": 571,
+   "min": 571,
+   "max": 571,
+   "n": 33
+  },
+  "camera_citation": {
+   "status": "error_fallback",
+   "violations": [
+    "unknown_evidence"
+   ],
+   "model_calls": 2
+  },
+  "rows": [
+   {
+    "case": "greeting",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "greeting",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "question",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "mixed",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "combat",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "busy",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weapon",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "insult",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "threat",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "unclear",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "quoted",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "closed",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "claim_war",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "expired",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "hidden",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "elin",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "elin",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "mira",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "mira",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "daren",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "daren",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "iona",
+    "descriptor": "benign",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   },
+   {
+    "case": "weak",
+    "persona": "iona",
+    "descriptor": "attack",
+    "same_plan": true,
+    "same_status": true,
+    "same_calls": true,
+    "same_evidence": true
+   }
+  ]
+ },
+ "cv_service": {
+  "timing_excludes_inference": [
+   {
+    "frame": "public sample",
+    "megapixels": 0.31,
+    "n": 30,
+    "median_ms": 8.4,
+    "p95_ms": 9.4,
+    "accepted": true
+   },
+   {
+    "frame": "all-black synthetic frame",
+    "megapixels": 1.79,
+    "n": 30,
+    "median_ms": 38.3,
+    "p95_ms": 44.9,
+    "accepted": true
+   },
+   {
+    "frame": "largest local capture",
+    "megapixels": 3.69,
+    "n": 30,
+    "median_ms": 123.8,
+    "p95_ms": 409.3,
+    "accepted": true
+   }
+  ],
+  "invalid_vlm_output": {
+   "not_json": "VLM_INVALID_OUTPUT",
+   "json_array": "VLM_INVALID_OUTPUT",
+   "character_without_description": "VLM_INVALID_OUTPUT"
+  },
+  "invalid_uploads": {
+   "empty": "rejected",
+   "not_an_image": "rejected",
+   "gif_type": "rejected"
+  },
+  "forwarded_descriptor_fields": {
+   "environment": "A cobbled town street",
+   "characters": [
+    "A guard"
+   ],
+   "objects": [
+    "A burning torch"
+   ],
+   "uncertainties": [
+    "Identity not visible"
+   ]
+  },
+  "descriptor_fields_not_forwarded": [
+   "player_actions",
+   "spatial_relationships",
+   "events",
+   "location_guess",
+   "visible_conditions"
+  ]
+ }
+}

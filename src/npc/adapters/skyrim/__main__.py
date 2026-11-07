@@ -2,11 +2,12 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from .bridge import Bridge
 from .protocol import Settings, SpeechInput
-from .diagnostics import configure, shutdown, event as log_event
+from .diagnostics import configure, set_verbose, shutdown, event as log_event
 from .server import create_app
 
 
@@ -27,7 +28,8 @@ def build_runner(settings, root):
     attempt_ms, retry_delay_ms = int(settings.model_cutoff_s * 1000), 250
     # Two calls at most: the first is cut off at model_cutoff_s, the retry (after its delay) gets the same again.
     cutoff_ms = max(50, min(timeout_ms - 1000, 2 * attempt_ms + retry_delay_ms))
-    return PreviewRunner(load_provider(root / settings.provider_profile),
+    from .model_log import LoggingProvider
+    return PreviewRunner(LoggingProvider(load_provider(root / settings.provider_profile)),
                          PreviewLimits(response_timeout_ms=timeout_ms, model_cutoff_ms=cutoff_ms,
                                        provider_attempt_ms=attempt_ms, retry_delay_ms=retry_delay_ms, retry_transient=True,
                                        max_input_bytes=12000),
@@ -78,6 +80,8 @@ def main():
     parser.add_argument("--say", help="Send this text to the running ANIMA bridge; does not start a server")
     parser.add_argument("--log-file", help="Optional rotating Anima dialogue log (1 MiB, two backups)")
     parser.add_argument("--console", action="store_true", help="Console window mode: title, colours and [PLUGIN] log tail")
+    parser.add_argument("--verbose", action="store_true", help="Also log full model prompts (about 6000 chars per message) to console and log file")
+    parser.add_argument("--no-color", action="store_true", help="Plain console output without ANSI colours")
     parser.add_argument("--local-speech", action="store_true", help="Add Windows TTS to default Whisper STT")
     args = parser.parse_args()
     root = Path.cwd()
@@ -88,6 +92,9 @@ def main():
     for name in ("cv_url", "rag_config", "provider_profile"):
         if (value := getattr(args, name)) is not None:
             raw[name] = value
+    if raw.get("provider_profile"):
+        from .provider_choice import choose_profile
+        raw["provider_profile"] = choose_profile(raw["provider_profile"], root=root)
     if args.attach_visual_reference:
         raw["attach_visual_reference"] = True
     if args.local_speech:
@@ -101,10 +108,11 @@ def main():
         raw["tts_url"] = local_tts
     settings = Settings.model_validate(raw)
     configure(args.log_file)
+    set_verbose(args.verbose)
     if args.console:
         from .console import setup as setup_console
         from .diagnostics import LOGGER
-        setup_console(LOGGER)
+        setup_console(LOGGER, color=not (args.no_color or os.environ.get("NO_COLOR")))
     if args.say is not None:
         import httpx
         try:
@@ -165,6 +173,22 @@ def main():
         from .speech import create_speech_app
         app.mount("/v1/speech", create_speech_app(speech_engine,
             tts_enabled=args.local_speech or turbo is not None, turbo=turbo))
+    from .banner import log_banner
+    from .model_log import provider_label
+    if speech_engine is None and turbo is None:
+        tts_text = ""
+    elif turbo is not None:
+        tts_text = f"Chatterbox Turbo, audio_output={settings.audio_output}"
+    elif args.local_speech:
+        tts_text = (f"{speech_engine.tts_engine}, folder={speech_engine.piper_directory}, "
+                    f"models={len(speech_engine.available_models())}, audio_output={settings.audio_output}")
+    else:
+        tts_text = "disabled (subtitles only)"
+    stt_text = (speech_engine.stt_engine if speech_engine is not None else "")
+    log_banner(settings, provider=provider_label(runner.provider) if runner else ("none", "none (" + settings.pipeline_mode + " mode)"),
+               stt=stt_text, tts=tts_text)
+    if args.verbose:
+        log_event("VERBOSE", prompts="full model prompts are written to console and log file")
     try:
         uvicorn.run(app, host="127.0.0.1", port=settings.port,
                     access_log=False, limit_concurrency=8, timeout_keep_alive=3)
