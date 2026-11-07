@@ -118,8 +118,12 @@ class Artifacts:
         if not raw.startswith(b"\x89PNG\r\n\x1a\n") or len(raw) > 32 * 1024**2:
             raise ValueError("invalid screenshot")
         old = sorted(directory.glob("frame-*.png"), key=lambda p: p.stat().st_mtime)
-        while len(old) >= self.max_screenshots:
-            old.pop(0).unlink()
+        # Frames are disposable, unlike handoff records, so they may hold only a share of the budget (real frames ~4 MB).
+        kept_bytes = sum(p.stat().st_size for p in old)
+        while old and (len(old) >= self.max_screenshots or kept_bytes + len(raw) > self.max_bytes // 4):
+            oldest = old.pop(0)
+            kept_bytes -= oldest.stat().st_size
+            oldest.unlink()
         self.check_budget(len(raw))
         path = directory / f"frame-{identifier}.png"
         atomic_write(path, raw)

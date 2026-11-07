@@ -2,50 +2,51 @@
 \input{diagram_styles.tex}
 \begin{document}
 \begin{tikzpicture}
-\node[context,text width=3.1cm] (persona) at (0,6.5) {Authored persona + social state + acknowledged history\\Identity, duties, relationships};
-\node[context,text width=3.1cm] (snapshot) at (0,4.6) {Interaction snapshot\\Trusted facts + revision};
-\node[storage,text width=3.1cm] (game) at (0,2.3) {Game / player interaction\\Skyrim connector or local lab};
-\node[block,text width=3.1cm] (adapter) at (0,.4) {Adapter boundary\\Input mapping / correlated receipts / memory acknowledgement};
-\node[block,text width=3.1cm] (output) at (0,-1.5) {Validated NPC output\\Text / supported audio command};
-\node[engine,text width=4.7cm] (policy) at (5.3,6.2) {Context appraisal\\Engagement / route selection};
-\node[engine,text width=4.7cm] (coord) at (5.3,3.9) {\textbf{ORCHESTRATION}\\PreviewRunner: request / retrieval coordination\\Deadlines; cancellation; revisions};
-\node[engine,text width=4.7cm] (prompt) at (5.3,1.6) {Context + prompt construction\\Whole evidence; bounded history; byte cap};
-\node[engine,text width=4.7cm] (validate) at (5.3,-.8) {Validation / one bounded repair\\Modes, length, IDs, revisions\\Validated fallback};
-\node[external,text width=3.4cm] (provider) at (11,6.1) {ModelProvider contract\\Compatible HTTP inference endpoint};
-\node[external,text width=3.4cm] (candidate) at (11,3.9) {ProviderReply normalization\\Text, finish reason, usage, model};
-\node[retrieval,text width=3.4cm] (search) at (11,1.3) {Online scoped retrieval\\CPU query embedding + Chroma\\One-file source binding / evidence recheck};
-\node[storage,text width=3.4cm] (index) at (11,-1.2) {Persistent vectors + manifest\\Committed source revisions};
-\node[storage,text width=3.1cm] (docs) at (0,-3.6) {Game-specific documents};
-\node[retrieval,text width=3.2cm] (parse) at (4.1,-3.6) {Extraction + token chunking};
-\node[retrieval,text width=3.0cm] (embed) at (8,-3.6) {CPU MiniLM embeddings};
-\node[heading] at (5.4,7.65) {ONLINE INTERACTION};
-\node[heading] at (3.5,-2.7) {OFFLINE KNOWLEDGE PREPARATION (NO GENERATOR TRAINING)};
-\draw[flow] (persona.east) -- ++(.6,0) |- (policy.west);
-\draw[flow] (snapshot.east) -- ++(.35,0) |- (coord.west);
-\draw[flow] (game) -- (adapter);
-\draw[flow] (adapter.east) -- ++(.4,0) |- (coord.west);
-\draw[control] (policy) -- (coord);
-\draw[control] (coord) -- (prompt);
-\draw[flow] (prompt.east) -- ++(.4,0) |- (provider.west);
-\draw[flow] (provider) -- (candidate);
-\draw[flow] (candidate.west) -- ++(-.3,0) |- (validate.east);
-\draw[control] (coord.east) -- ++(.35,0) |- (search.west);
-\draw[flow] (search.west) -- ++(-.35,0) |- (prompt.east);
-\draw[flow] (index) -- (search);
-\draw[flow] (validate.west) -- ++(-.4,0) |- (output.east);
-\draw[control] (validate.west) -- ++(-.8,0) |- (prompt.west);
-\draw[flow] (docs) -- (parse);
-\draw[flow] (parse) -- (embed);
-\draw[flow] (embed.east) -| (index.south);
+% Connector column
+\node[storage,text width=3.3cm] (game) at (0,8) {Game connector\\Skyrim, browser lab or any new game};
+\node[context,text width=3.3cm] (store) at (0,5.75) {Social store + persona\\Relationships, 8 exchanges, conversation state};
+\node[external,optional,text width=3.3cm] (cv) at (0,2.9) {Optional vision reference\\Untrusted prompt data};
+\node[block,text width=3.3cm] (out) at (0,.5) {Staged delivery\\Subtitle, voice, receipts};
+% Core chain
+\node[engine,text width=4.7cm] (ctx) at (5.6,8) {Context appraisal\\Perceiver, age, confidence filters};
+\node[engine,text width=4.7cm] (pol) at (5.6,6.65) {Behaviour policy\\Authored, end or generate};
+\node[engine,text width=4.7cm] (dir) at (5.6,5.3) {Conversation director\\Turn type and move; no model call};
+\node[retrieval,optional,text width=4.7cm] (ret) at (5.6,3.95) {Scoped retrieval, if configured\\Bound source; at most 3 passages};
+\node[engine,text width=4.7cm] (pro) at (5.6,2.3) {Prompt builder\\Persona, evidence, history as data};
+\node[engine,text width=4.7cm] (val) at (5.6,.5) {Validation and bounded recovery\\Schema, length, IDs, repeats, names\\Two calls at most; authored fallback};
+% Right column
+\node[storage,text width=3.3cm] (docs) at (11.2,7.75) {Creator documents\\NPC source bindings};
+\node[retrieval,text width=3.3cm] (ing) at (11.2,6) {Offline ingestion\\Chunking; CPU MiniLM};
+\node[storage,text width=3.3cm] (idx) at (11.2,3.95) {Chroma index + manifest\\Committed revisions};
+\node[external,text width=3.3cm] (prov) at (11.2,2.3) {ModelProvider contract\\Any compatible model};
+\node[external,text width=3.3cm] (rep) at (11.2,.5) {ProviderReply\\Text, finish, usage, model};
+% Core flow
+\draw[flow] (game) -- node[edgelabel,above]{turn} (ctx);
+\draw[flow] (ctx) -- (pol);
+\draw[flow] (pol) -- node[edgelabel,right]{generate} (dir);
+\draw[flow] (dir) -- (ret);
+\draw[flow] (ret) -- (pro);
+\draw[flow] (pro) -- (val);
+\draw[control] (pol.west) -- (3.0,6.65) -- node[edgelabel,pos=.42,rotate=90]{authored or end} (3.0,.72) -- ($(val.west)+(0,.22)$);
+% Connector and memory
+\draw[flow,<->] (game) -- node[edgelabel,right]{load} (store);
+\draw[flow] ($(val.west)+(0,-.22)$) -- ($(out.east)+(0,-.22)$);
+\draw[flow] (out.west) -- ++(-.32,0) |- node[edgelabel,pos=.25,rotate=90,yshift=1pt]{completed receipt only} (store.west);
+\draw[control] (cv.east) -- (2.45,2.9) |- (pro.west);
+% Knowledge and model
+\draw[flow] (docs) -- (ing);
+\draw[flow] (ing) -- (idx);
+\draw[control] (idx) -- (ret);
+\draw[flow] (pro) -- (prov);
+\draw[flow] (prov) -- (rep);
+\draw[flow] (rep) -- (val);
 \begin{pgfonlayer}{background}
-\node[group,fit=(persona)(snapshot),label={[heading]above:CONTEXT + PERSONA}] {};
-\node[group,fit=(game)(adapter)(output),label={[heading]above:GAME INTERACTION / DELIVERY}] {};
-\node[group,fit=(policy)(coord)(prompt)(validate)] {};
-\node[group,fit=(provider)(candidate),label={[heading]above:MODEL ABSTRACTION}] {};
-\node[group,fit=(search)(index),label={[heading]below:KNOWLEDGE RETRIEVAL}] {};
+\node[group,fit=(game)(store)(cv)(out),label={[heading]above:GAME SIDE}] {};
+\node[group,fit={(ctx)(val)(2.8,8)},label={[heading]above:{CORE: NO GAME OR VENDOR LOGIC}}] {};
+\node[group,fit=(docs)(ing)(idx),label={[heading]above:{KNOWLEDGE: NO TRAINING}}] {};
+\node[group,fit=(prov)(rep),label={[heading]below:REPLACEABLE MODEL}] {};
 \end{pgfonlayer}
-\draw[flow] (0,-4.7) -- (.8,-4.7) node[edgelabel,right] {data / evidence};
-\draw[control] (4,-4.7) -- (4.8,-4.7) node[edgelabel,right] {control / optional work};
-\node[edgelabel] at (10,-4.7) {Visual reference remains untrusted data};
+\draw[flow] (0,-1.2) -- (.8,-1.2) node[edgelabel,right] {data and control};
+\draw[control] (3.6,-1.2) -- (4.4,-1.2) node[edgelabel,right] {optional or bypass};
 \end{tikzpicture}
 \end{document}

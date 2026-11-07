@@ -460,7 +460,9 @@ def test_runner_composes_configured_rag_and_provider(tmp_path):
     config.write_text(json.dumps({"backend": "http", "bindings": [{"game_id": "skyrim",
         "world_id": "local-skyrim", "npc_ids": ["ref:00013478"], "source": "public.txt"}]}))
     runner = build_runner(settings(tmp_path, provider_profile="offline.yaml", rag_config="rag.json"), tmp_path)
-    assert isinstance(runner.provider, OfflineProvider)
+    from npc.adapters.skyrim.model_log import LoggingProvider
+    assert isinstance(runner.provider, LoggingProvider)  # the connector logs every model call
+    assert isinstance(runner.provider.inner, OfflineProvider)
     assert isinstance(runner.retriever, HTTPRetriever)
     assert runner.retriever.config.bindings[0].npc_ids == ("ref:00013478",)
     assert runner.limits.max_input_bytes == 12000
@@ -600,7 +602,7 @@ def test_capture_vlm_rag_generation_delivery_roundtrip(tmp_path, attach):
         runner = PreviewRunner(Provider(), PreviewLimits(max_input_bytes=12000), retriever=retriever)
         config = settings(tmp_path, pipeline_mode="preview", attach_visual_reference=attach).model_copy(update={"capture_screenshots": True})
         bridge = Bridge(config, root=tmp_path, cv_client=vision, runner=runner,
-                        capture=lambda _: png_from_bgra(1, 1, b"\0\0\0\xff"))
+                        capture=lambda _: png_from_bgra(1, 1, b"\x50\x60\x70\xff"))  # visible: black frames skip the VLM
         try:
             await ready(bridge)
             question = speech().model_copy(update={"text": "Where can I find the healer?"})

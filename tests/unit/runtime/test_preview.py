@@ -318,3 +318,20 @@ def test_stage_timings_cover_prompt_model_and_validation(scenario_data):
     result = asyncio.run(PreviewRunner(ScriptedProvider(VALID)).run(generating(scenario_data)))
     assert {"prompt", "model", "validation"} <= set(result.stage_ms)
     assert all(value >= 0 for value in result.stage_ms.values())
+
+
+def test_a_reply_that_is_only_too_long_is_shortened_without_another_call(scenario_data):
+    long = json.dumps({"mode": "speech", "text": "I keep watch here. Nobody thanks me for it. The nights are long.", "cue": None, "evidence_ids": []})
+    provider = ScriptedProvider(long)
+    result = asyncio.run(PreviewRunner(provider).run(generating(scenario_data)))
+    assert result.status == "repair_success" and result.model_calls == 1
+    assert result.plan.max_sentences == 2
+    assert result.response.text == "I keep watch here. Nobody thanks me for it."  # whole leading sentences, within the plan's limit
+    assert "too_many_sentences" in result.violations
+
+
+def test_shortening_never_rescues_other_faults(scenario_data):
+    bad = json.dumps({"mode": "speech", "text": "As an AI language model I cannot help. Sorry.", "cue": None, "evidence_ids": []})
+    provider = ScriptedProvider(bad, bad)
+    result = asyncio.run(PreviewRunner(provider).run(generating(scenario_data)))
+    assert result.status == "error_fallback" and result.model_calls == 2

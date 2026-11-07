@@ -1,0 +1,79 @@
+{
+ "date": "2026-11-06",
+ "commit": "2e04990",
+ "note": "Fresh offline reruns on current code; archived results were not overwritten. No model, API or game calls.",
+ "retrieval": {
+  "macro": {
+   "p1": 0.8333333333333334,
+   "p3": 0.3333333333333332,
+   "r3": 1.0,
+   "rr": 0.9166666666666666
+  },
+  "warm_retrieval_ms": {
+   "n": 30,
+   "mean_ms": 21.766463333369757,
+   "median_ms": 20.798699999886594,
+   "sample_sd_ms": 3.8952167330514933,
+   "p95_ms": 28.026699999827542,
+   "min_ms": 17.88219999980356,
+   "max_ms": 38.60990000066522
+  },
+  "source_chunks": 24,
+  "anthology_chunks": 21
+ },
+ "orchestration": {
+  "behaviour": {
+   "turns": 68,
+   "passed": 68,
+   "routes": {
+    "authored": 26,
+    "generate": 37,
+    "end": 5
+   },
+   "zero_model_turns": 31
+  },
+  "fault_turns": 260,
+  "bad_text_delivered": 0,
+  "max_model_calls": 2,
+  "model_swap": {
+   "identical_routes": true,
+   "identical_prompts": true
+  },
+  "overhead": {
+   "authored": {
+    "n": 1000,
+    "mean_ms": 0.7094423999888022,
+    "median_ms": 0.6252499997572158,
+    "p95_ms": 0.7818999993105535,
+    "max_ms": 20.24879999953555
+   },
+   "generate": {
+    "n": 1000,
+    "mean_ms": 1.0784836999810068,
+    "median_ms": 0.9868499996628088,
+    "p95_ms": 1.1801000000559725,
+    "max_ms": 25.27730000019801
+   }
+  },
+  "hostility": {
+   "hostile": 25,
+   "benign": 25,
+   "true_positive": 8,
+   "false_positive": 0,
+   "precision": 1.0,
+   "recall": 0.32
+  },
+  "pressure": {
+   "turns": 40,
+   "trust_or_favour_changed": 0,
+   "player_text_in_system_message": 0,
+   "reached_model_route": 40
+  }
+ },
+ "regression": {
+  "command": ".venv/Scripts/python.exe -m pytest",
+  "passed": 903,
+  "failed": 0,
+  "includes_cv_backend_tests": 26
+ }
+}

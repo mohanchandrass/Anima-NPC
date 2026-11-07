@@ -7,13 +7,14 @@
 \definecolor{ext}{HTML}{F7EBDD}
 \definecolor{infra}{HTML}{F1F3F5}
 \tikzset{
- every node/.style={font=\sffamily\fontsize{8.5}{10}\selectfont,align=center},
+ every node/.style={font=\sffamily\fontsize{8.5}{10}\selectfont,align=center,execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
  block/.style={draw=orch!80,fill=white,rounded corners=1.5pt,minimum height=7mm,inner sep=3pt,line width=.55pt},
  context/.style={block,fill=ctx},
  engine/.style={block,fill=orch,text=white},
  retrieval/.style={block,fill=retr},
  external/.style={block,fill=ext},
  storage/.style={block,fill=infra},
+ optional/.style={dashed},
  flow/.style={-{Stealth[length=2mm]},draw=orch!90,line width=.65pt},
  control/.style={flow,dashed},
  error/.style={flow,densely dotted},

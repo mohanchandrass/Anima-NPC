@@ -7,7 +7,7 @@ import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ARGUMENTS = ("-m npc.adapters.skyrim --provider-profile configs/providers/gemini.yaml --local-speech "
+ARGUMENTS = ("-m npc.adapters.skyrim --provider-profile configs/providers/auto.yaml --local-speech "
              "--log-file output/skyrim/anima-console.log --console")
 PROTECTED = ("d:/steam", "d:/mo2")
 

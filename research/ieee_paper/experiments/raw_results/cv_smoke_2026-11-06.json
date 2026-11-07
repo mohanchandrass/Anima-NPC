@@ -1,0 +1,298 @@
+{
+ "note": "Smoke tests by a separate session through the real CV service on a temporary port, with CV left off in the connector. Not an accuracy study.",
+ "before_prompt_and_capture_fix": {
+  "images": "2 public samples, 1 synthetic black frame",
+  "reported": "Two requests right after install reached the 90 s timeout and left no output file.",
+  "rows": [
+   {
+    "run": "black_frame",
+    "vlm_ms": 4774.2,
+    "environment": {
+     "description": "A dark, possibly underground or enclosed space with no visible light source.",
+     "location_guess": "Underground chamber or enclosed room",
+     "visible_conditions": [
+      "Dark, no visible light"
+     ]
+    },
+    "characters": [
+     "A single, indistinct figure in the darkness."
+    ],
+    "objects": [
+     "Unknown object"
+    ],
+    "uncertainties": [
+     "The identity and nature of the figure and object are unclear."
+    ]
+   },
+   {
+    "run": "cold_sky2",
+    "vlm_ms": 9328.8,
+    "environment": {
+     "description": null,
+     "location_guess": "background",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "a character holding a weapon"
+    ],
+    "objects": [
+     "weapon"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   },
+   {
+    "run": "warm_sky1_0",
+    "vlm_ms": 5838.6,
+    "environment": {
+     "description": null,
+     "location_guess": "village",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "character wearing armor and carrying a bow",
+     "character standing in the distance",
+     "character standing in the distance",
+     "character standing in the distance"
+    ],
+    "objects": [
+     "fire pit",
+     "barrel"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   },
+   {
+    "run": "warm_sky1_1",
+    "vlm_ms": 5893.2,
+    "environment": {
+     "description": null,
+     "location_guess": "village",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "person wearing armor and carrying a bow",
+     "person standing in the distance",
+     "person standing in the distance",
+     "person standing in the distance"
+    ],
+    "objects": [
+     "fire pit",
+     "barrel"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   },
+   {
+    "run": "warm_sky1_2",
+    "vlm_ms": 6011.1,
+    "environment": {
+     "description": null,
+     "location_guess": "village",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "person wearing armor and carrying a bow",
+     "person standing in the distance",
+     "person standing in the distance",
+     "person standing in the distance"
+    ],
+    "objects": [
+     "fire pit",
+     "barrel"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   },
+   {
+    "run": "warm_sky2_0",
+    "vlm_ms": 3514.4,
+    "environment": {
+     "description": null,
+     "location_guess": "background",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "a character holding a weapon"
+    ],
+    "objects": [
+     "weapon"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   },
+   {
+    "run": "warm_sky2_1",
+    "vlm_ms": 3597.7,
+    "environment": {
+     "description": null,
+     "location_guess": "background",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "a character holding a weapon"
+    ],
+    "objects": [
+     "weapon"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   },
+   {
+    "run": "warm_sky2_2",
+    "vlm_ms": 3447.0,
+    "environment": {
+     "description": null,
+     "location_guess": "background",
+     "visible_conditions": [
+      "clear"
+     ]
+    },
+    "characters": [
+     "a character holding a weapon"
+    ],
+    "objects": [
+     "weapon"
+    ],
+    "uncertainties": [
+     "uncertain"
+    ]
+   }
+  ]
+ },
+ "after_prompt_and_capture_fix": {
+  "images": "1 live game frame repeated, 2 public samples",
+  "rows": [
+   {
+    "run": "cold_game_frame",
+    "environment": "A medieval village with cobblestone streets, wooden buildings, barrels, and a stone wall, possibly at night.",
+    "characters": [
+     "A armored guard holding a torch, wearing a helmet and chainmail."
+    ],
+    "objects": [
+     "A wooden barrel on the right side of the image."
+    ],
+    "uncertainties": [
+     "The exact location within the village is not clear."
+    ],
+    "source": {
+     "detector_model": "disabled",
+     "vlm_model": "qwen2.5vl:3b"
+    }
+   },
+   {
+    "run": "warm_game_frame_0",
+    "environment": "A medieval village with cobblestone streets, wooden buildings, barrels, and a stone wall, suggesting a nighttime setting.",
+    "characters": [
+     "A armored guard holding a torch, wearing a helmet and chainmail."
+    ],
+    "objects": [
+     "Wooden barrels stacked on the right side of the image."
+    ],
+    "uncertainties": [
+     "The exact location within the village cannot be determined."
+    ],
+    "source": {
+     "detector_model": "disabled",
+     "vlm_model": "qwen2.5vl:3b"
+    }
+   },
+   {
+    "run": "warm_game_frame_1",
+    "environment": "A medieval village with cobblestone streets, wooden buildings, barrels, and a stone wall, suggesting a nighttime setting.",
+    "characters": [
+     "A armored guard holding a torch, wearing a helmet and chainmail."
+    ],
+    "objects": [
+     "Wooden barrels stacked on the right side of the image."
+    ],
+    "uncertainties": [
+     "The exact location within the village cannot be determined."
+    ],
+    "source": {
+     "detector_model": "disabled",
+     "vlm_model": "qwen2.5vl:3b"
+    }
+   },
+   {
+    "run": "warm_game_frame_2",
+    "environment": "A medieval village with cobblestone streets, wooden buildings, barrels, and a stone wall, suggesting a nighttime setting.",
+    "characters": [
+     "A armored guard holding a torch, wearing a helmet and chainmail."
+    ],
+    "objects": [
+     "Wooden barrels stacked on the right side of the image."
+    ],
+    "uncertainties": [
+     "The exact location within the village cannot be determined."
+    ],
+    "source": {
+     "detector_model": "disabled",
+     "vlm_model": "qwen2.5vl:3b"
+    }
+   },
+   {
+    "run": "warm_sky1",
+    "environment": "A medieval village with cobblestone streets, wooden buildings, and a clear sky.",
+    "characters": [
+     "A character in armor with a bow and quiver on their back.",
+     "A character in medieval clothing walking away.",
+     "A character in medieval clothing standing near a barrel."
+    ],
+    "objects": [
+     "A round, metal fire pit with a glowing fire inside.",
+     "A wooden barrel with a metal lid."
+    ],
+    "uncertainties": [],
+    "source": {
+     "detector_model": "disabled",
+     "vlm_model": "qwen2.5vl:3b"
+    }
+   },
+   {
+    "run": "warm_sky2",
+    "environment": "A scenic landscape with mountains in the background, a wooden structure, and a clear sky.",
+    "characters": [
+     "A character wearing armor and holding a weapon."
+    ],
+    "objects": [
+     "A wooden structure with a cross on top.",
+     "A green arrow with a green tip."
+    ],
+    "uncertainties": [
+     "The identity of the character or the exact nature of the arrow."
+    ],
+    "source": {
+     "detector_model": "disabled",
+     "vlm_model": "qwen2.5vl:3b"
+    }
+   }
+  ]
+ },
+ "capture_fix_reported": {
+  "method": "PrintWindow with PW_CLIENTONLY and PW_RENDERFULLCONTENT replacing BitBlt",
+  "black_share_before_n1": 0.98,
+  "black_share_after": 0.062,
+  "capture_median_ms_incl_png": 156,
+  "n_after": 5,
+  "caveat": "Foreground check bypassed for the test; no gameplay-load measurement."
+ }
+}

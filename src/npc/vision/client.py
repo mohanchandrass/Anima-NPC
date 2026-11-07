@@ -63,11 +63,12 @@ class CVSceneClient:
             async with httpx.AsyncClient(timeout=self.timeout_s, trust_env=False, transport=self.transport) as client:
                 async with client.stream("POST", f"{self.base_url}/api/v1/analyze", files={"image": ("screenshot.png", image, content_type)}) as response:
                     if response.status_code >= 500: raise CVFailure("cv_unavailable")
-                    if response.status_code != 200: raise CVFailure("cv_invalid_response")
                     raw = bytearray()
                     async for chunk in response.aiter_bytes():
                         raw.extend(chunk)
                         if len(raw) > MAX_CV_RESPONSE_BYTES: raise CVFailure("cv_invalid_response")
+                    if response.status_code == 422 and b'"BLANK_FRAME"' in raw: raise CVFailure("cv_blank_frame")
+                    if response.status_code != 200: raise CVFailure("cv_invalid_response")
         except httpx.TimeoutException: raise CVFailure("cv_timeout") from None
         except httpx.HTTPError: raise CVFailure("cv_unavailable") from None
         import json

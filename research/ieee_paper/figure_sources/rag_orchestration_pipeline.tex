@@ -2,35 +2,38 @@
 \input{diagram_styles.tex}
 \begin{document}
 \begin{tikzpicture}
-\node[context,text width=4cm] (input) {Utterance + snapshot + acknowledged history};
-\node[context,text width=4cm,below=3mm of input] (context) {Persona / trusted-context appraisal};
-\node[engine,diamond,aspect=3,text width=2.9cm,inner sep=0pt,below=3mm of context] (route) {Engagement route};
-\node[retrieval,text width=4cm,below=4mm of route] (need) {Knowledge need + one-file source binding};
-\node[retrieval,text width=4cm,below=3mm of need] (retrieve) {Follow-up question resolution\\CPU embedding + Chroma / filtering};
-\node[engine,text width=4cm,below=3mm of retrieve] (pack) {Evidence + context packing\\Prompt / provider invocation};
-\node[external,text width=4cm,below=3mm of pack] (candidate) {LLM candidate response};
-\node[engine,diamond,aspect=3,text width=3cm,inner sep=0pt,below=3mm of candidate] (check) {Validate + freshness};
-\node[block,text width=4cm,below=4mm of check] (delivery) {Accepted response / adapter delivery};
-\node[storage,text width=1.55cm] (authored) at ($(need.west)+(-1.25,0)$) {Authored reply\\or end};
-\node[storage,text width=1.55cm] (repair) at ($(candidate.east)+(1.25,0)$) {One repair\\same cutoff};
-\node[storage,text width=1.55cm] (fallback) at ($(candidate.west)+(-1.25,-.7)$) {Timeout / error\\fallback};
-\node[edgelabel] (discard) at ($(check.east)+(1.25,-1.4)$) {Stale / cancelled:\\discard, no speech};
+\node[context,text width=4.2cm] (input) at (0,12.4) {Player turn, trusted snapshot, completed history};
+\node[context,text width=4.2cm] (context) at (0,11.2) {Persona and context appraisal};
+\node[engine,diamond,aspect=3.2,text width=2.5cm,inner sep=0pt] (route) at (0,9.95) {Route};
+\node[engine,text width=4.2cm] (director) at (0,8.65) {Conversation director\\Turn type and move};
+\node[retrieval,optional,text width=4.2cm] (retrieve) at (0,7.25) {Scoped retrieval, if bound\\8 candidates; at most 3 unused};
+\node[engine,text width=4.2cm] (pack) at (0,5.85) {Prompt construction\\Evidence, history, move as data};
+\node[external,text width=4.2cm] (candidate) at (0,4.65) {Provider call: candidate JSON};
+\node[engine,diamond,aspect=3.2,text width=2.5cm,inner sep=0pt] (check) at (0,3.45) {Validate};
+\node[block,text width=4.2cm] (stage) at (0,2.2) {Staged: revision, delivery ID, expiry};
+\node[block,text width=4.2cm] (receipt) at (0,1) {Connector delivers; completed receipt enters memory};
+\node[storage,text width=1.5cm] (authored) at (-3.45,8.65) {Authored line or end};
+\node[external,optional,text width=1.5cm] (vision) at (-3.45,5.85) {Optional visual reference};
+\node[storage,text width=1.75cm] (repair) at (4.25,4.65) {One repair or one retry};
+\node[storage,text width=1.75cm] (fallback) at (4.25,2.2) {Authored fallback};
 \draw[flow] (input) -- (context);
 \draw[flow] (context) -- (route);
-\draw[control] (route) -- node[edgelabel,right]{generate} (need);
-\draw[control] (route.west) -| (authored.north);
-\draw[flow] (need) -- (retrieve);
+\draw[flow] (route) -- node[edgelabel,right]{generate} (director);
+\draw[flow] (director) -- (retrieve);
 \draw[flow] (retrieve) -- (pack);
-\draw[control] (need.east) -- ++(2,0) |- node[edgelabel,pos=.2,right]{disabled} (pack.east);
 \draw[flow] (pack) -- (candidate);
 \draw[flow] (candidate) -- (check);
-\draw[flow] (check) -- node[edgelabel,right]{accepted} (delivery);
-\draw[control] (check.east) -| (repair.south);
-\draw[control] (repair.north) |- (pack.east);
-\draw[error] (retrieve.west) -| (fallback.north);
-\draw[error] (candidate.west) -- ++(-.7,0) |- (fallback.east);
-\draw[flow] (fallback.south) |- (delivery.west);
-\draw[flow] (authored.west) -- ++(-.4,0) |- (delivery.west);
-\draw[error] (check.east) -- ++(.3,0) |- (discard.north);
+\draw[flow] (check) -- node[edgelabel,right]{accepted} (stage);
+\draw[flow] (stage) -- (receipt);
+\draw[flow] (route.west) -| (authored.north);
+\draw[flow] (authored.south) -- ($(authored.south)+(0,-1.25)$) -| ($(vision.west)+(-.22,0)$) |- ($(stage.west)$);
+\draw[control] (vision) -- (pack);
+\draw[control] ($(retrieve.east)+(0,.12)$) -- ++(.4,0) |- node[edgelabel,pos=.25,right,text width=1.7cm,align=left]{move may change} (director.east);
+\draw[flow] (candidate) -- node[edgelabel,above]{failure} (repair);
+\draw[flow] (check.east) -- node[edgelabel,below,pos=.45]{invalid} (3.75,3.45) -- (3.75,4.15);
+\draw[flow] (3.75,5.15) |- (pack.east);
+\draw[flow] (4.75,4.15) -- node[edgelabel,right,text width=.9cm,align=left]{limit reached} (4.75,2.75);
+\draw[flow] (fallback) -- (stage);
+\node[edgelabel,text width=8.6cm] at (.45,-.05) {Two model calls at most. Stale or cancelled at any stage: no speech. An over-long reply is cut at a sentence boundary without a model call.};
 \end{tikzpicture}
 \end{document}

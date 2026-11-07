@@ -8,8 +8,22 @@ ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg"}
 ALLOWED_FORMATS = {"PNG", "JPEG"}
 
 
+BLACK_LEVEL = 8  # luma below this is treated as black
+BLANK_BLACK_SHARE = 0.98  # a dark but real scene stays well under this
+
+
 class ImageValidationError(ValueError):
     pass
+
+
+class BlankFrameError(ImageValidationError):
+    pass
+
+
+def is_blank_frame(image: Image.Image) -> bool:
+    """True when almost nothing is visible. The VLM invents figures and objects when given a black frame."""
+    histogram = image.convert("L").histogram()
+    return sum(histogram[:BLACK_LEVEL]) / sum(histogram) >= BLANK_BLACK_SHARE
 
 
 @dataclass(frozen=True)

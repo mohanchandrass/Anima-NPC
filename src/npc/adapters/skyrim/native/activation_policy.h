@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 namespace anima {
 // Menu-less NPCs answer E with a static bark and open no DialogueMenu. When the player activates an actor and no
 // menu opens within kActivationMenuWaitMs, the activation is treated as "no menu" and a direct session starts.
@@ -26,5 +27,26 @@ inline const char* ActivationReason(bool menuOpened, bool sessionActive, bool va
     if (sessionActive) return "session_active";
     if (!validTarget) return "invalid_target";
     return "timeout";
+}
+
+// Who started a session decides whether the text box opens with it. Only an explicit action opens the box.
+enum class StartSource { activation, chat_key, talk_line, push_to_talk };
+inline bool OpensTextBoxOnStart(StartSource source) {
+    return source == StartSource::chat_key || source == StartSource::talk_line;
+}
+// Hint shown once when an activation starts a session (no text box).
+inline std::string KeyLabel(unsigned code) {
+    static const char* const top = "QWERTYUIOP";   // DirectInput 16..25
+    static const char* const home = "ASDFGHJKL";   // 30..38
+    static const char* const bottom = "ZXCVBNM";   // 44..50
+    if (code >= 16 && code <= 25) return std::string(1, top[code - 16]);
+    if (code >= 30 && code <= 38) return std::string(1, home[code - 30]);
+    if (code >= 44 && code <= 50) return std::string(1, bottom[code - 44]);
+    if (code >= 59 && code <= 68) return "F" + std::to_string(code - 58);
+    if (code == 87 || code == 88) return "F" + std::to_string(code - 76);
+    return "key " + std::to_string(code);
+}
+inline std::string ActivationHint(unsigned chatKey, unsigned pttKey, unsigned menuKey) {
+    return "ANIMA: press " + KeyLabel(chatKey) + " to type, hold " + KeyLabel(pttKey) + " to talk, " + KeyLabel(menuKey) + " for options";
 }
 }

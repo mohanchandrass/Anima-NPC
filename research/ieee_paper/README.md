@@ -2,6 +2,21 @@
 
 IEEE paper source and scientific-revision artifacts. Authors, in order: Mohan Chandra S S (1RVU23CSE282), Shreyas C (1RVU23CSE443), Nithish Gowda H N (1RVU23CSE317), Nithin S (1RVU23CSE316). RV University. USNs replace emails as requested.
 
+## Current revision (2026-11-06)
+
+The manuscript is a 7-page rewrite describing the 6 November 2026 working tree on top of commit 2e04990. See [REPORT_REVISION.md](REPORT_REVISION.md). Sections further down this file describe earlier revisions.
+
+Deliverables: `paper.pdf` (identical to `main.pdf`) and `paper.docx`. Rebuild both from this directory:
+
+```sh
+../../.tools/tectonic/tectonic.exe --keep-logs --keep-intermediates main.tex
+cp main.pdf paper.pdf
+python build_docx.py
+../../.venv/Scripts/python.exe validate_and_package.py
+```
+
+`build_docx.py` needs python-docx and PyMuPDF, authoring tools that are not in `requirements.txt`. `validate_and_package.py` runs from the project `.venv`.
+
 ## Overleaf and local compilation
 
 Upload `paper_source.zip` using Overleaf New Project -> Upload Project. Select `main.tex` and use pdfLaTeX. The ZIP includes the main source, bibliography, compiled native-vector figures, editable TikZ/macro sources, public experiment data, raw observations, analysis scripts and reproduction notes. It excludes credentials, embedding weights, indices, player data and game assets. No SVG conversion or shell escape is needed to build the paper.

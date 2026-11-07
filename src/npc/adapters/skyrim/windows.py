@@ -9,8 +9,16 @@ import threading
 from .assets import png_from_bgra
 
 
+PW_CLIENTONLY_RENDERFULLCONTENT = 0x1 | 0x2
+
+
 def capture_client(pid: int) -> bytes:
-    """Capture only the foreground game client. Borderless mode is recommended."""
+    """Capture only the foreground game client. Borderless mode is recommended.
+
+    PrintWindow with full-content rendering reads the DirectX surface; BitBlt from the window DC returned black.
+    This process must stay DPI-unaware: the client size then matches the frame the game draws, whereas a DPI-aware
+    caller gets a larger bitmap with the game in one corner and the rest black.
+    """
     if os.name != "nt":
         raise OSError("game capture requires Windows")
     user = C.WinDLL("user32", use_last_error=True)
@@ -24,12 +32,12 @@ def capture_client(pid: int) -> bytes:
     user.GetClientRect.argtypes = [W.HWND, C.POINTER(W.RECT)]
     user.GetDC.argtypes, user.GetDC.restype = [W.HWND], W.HDC
     user.ReleaseDC.argtypes = [W.HWND, W.HDC]
+    user.PrintWindow.argtypes = [W.HWND, W.HDC, W.UINT]
     gdi.CreateCompatibleDC.argtypes, gdi.CreateCompatibleDC.restype = [W.HDC], W.HDC
     gdi.CreateCompatibleBitmap.argtypes, gdi.CreateCompatibleBitmap.restype = [W.HDC, C.c_int, C.c_int], W.HBITMAP
     gdi.SelectObject.argtypes, gdi.SelectObject.restype = [W.HDC, W.HGDIOBJ], W.HGDIOBJ
     gdi.DeleteObject.argtypes = [W.HGDIOBJ]
     gdi.DeleteDC.argtypes = [W.HDC]
-    gdi.BitBlt.argtypes = [W.HDC, C.c_int, C.c_int, C.c_int, C.c_int, W.HDC, C.c_int, C.c_int, W.DWORD]
     gdi.GetDIBits.argtypes = [W.HDC, W.HBITMAP, W.UINT, W.UINT, C.c_void_p, C.c_void_p, W.UINT]
     windows = []
 
@@ -66,7 +74,7 @@ def capture_client(pid: int) -> bytes:
         if not source or not target or not bitmap:
             raise OSError("cannot allocate game capture surface")
         previous = gdi.SelectObject(target, bitmap)
-        if not gdi.BitBlt(target, 0, 0, width, height, source, 0, 0, 0x00CC0020):
+        if not user.PrintWindow(hwnd, target, PW_CLIENTONLY_RENDERFULLCONTENT):
             raise OSError("game capture failed")
         # GetDIBits requires the bitmap to be deselected from the memory DC.
         gdi.SelectObject(target, previous)

@@ -24,9 +24,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "output/skyrim-mod/AnimaConnector.zip"
 CONSOLE_EXE = ROOT / "output/skyrim-mod/AnimaConsole.exe"
 BACKUPS = ROOT / "output/skyrim-mod/backups"
-COPIED = ("SKSE/Plugins/AnimaConnector.dll", "Anima.esp", "Scripts/AnimaNative.pex", "Scripts/AnimaStartDialogue.pex")
+COPIED = ("SKSE/Plugins/AnimaConnector.dll", "Anima.esp", "Seq/Anima.seq", "Scripts/AnimaNative.pex", "Scripts/AnimaStartDialogue.pex")
 INI = "SKSE/Plugins/AnimaConnector.ini"
 MANIFEST = "manifest.json"
+OLD_CHAT_KEY, NEW_CHAT_KEY = 64, 35
 
 
 def game_running(process: str = "SkyrimSE.exe") -> bool:
@@ -47,6 +48,10 @@ def merge_ini(installed: str, packaged: str, console_exe: Path | None) -> str:
             result.add_section(section)
         for key, value in current.items(section):
             result.set(section, key, value)
+    # 0.5.6: F6 (scan code 64) is a common quick-load key, so the old default moves to H (35). Other values stay.
+    if result.has_option("Connection", "ChatKey") and current.has_option("Connection", "ChatKey")             and current.get("Connection", "ChatKey").strip() == str(OLD_CHAT_KEY):
+        result.set("Connection", "ChatKey", str(NEW_CHAT_KEY))
+        print(f"Migrated ChatKey={OLD_CHAT_KEY} (F6, the old default) to ChatKey={NEW_CHAT_KEY} (H).")
     if console_exe is not None:
         if not result.has_section("Console"):
             result.add_section("Console")
@@ -126,7 +131,7 @@ def main() -> None:
     exe = None if args.no_console else CONSOLE_EXE
     try:
         if exe is not None and not args.dry_run:
-            ini = f"[Console]\nPython={ROOT / '.venv/Scripts/python.exe'}\nWorkingDir={ROOT}\nArguments=-m npc.adapters.skyrim --provider-profile configs/providers/gemini.yaml --local-speech --log-file output/skyrim/anima-console.log --console\n"
+            ini = f"[Console]\nPython={ROOT / '.venv/Scripts/python.exe'}\nWorkingDir={ROOT}\nArguments=-m npc.adapters.skyrim --provider-profile configs/providers/auto.yaml --local-speech --log-file output/skyrim/anima-console.log --console\n"
             (exe.parent / "AnimaConsole.ini").write_text(ini, encoding="utf-8")
         for action in install(args.game_dir, console_exe=exe, dry_run=args.dry_run):
             print(action)

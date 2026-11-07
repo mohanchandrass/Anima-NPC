@@ -1,0 +1,23 @@
+\documentclass[border=4pt]{standalone}
+\input{diagram_styles.tex}
+\begin{document}
+\begin{tikzpicture}
+\node[storage,text width=7.6cm] (q) at (0,4.9) {Same question to both: ``What is the king's plan for the war?''};
+\node[context,text width=3.5cm] (p) at (-2.1,3.6) {Peasant\\Binding: peasant file};
+\node[context,text width=3.5cm] (a) at (2.1,3.6) {War adviser\\Binding: adviser file};
+\node[retrieval,text width=3.5cm] (pd) at (-2.1,2.05) {Public lore + mill rumours\\\textit{march east before the harvest}};
+\node[retrieval,text width=3.5cm] (ad) at (2.1,2.05) {Public lore + council record\\\textit{Operation Greywater}};
+\node[engine,text width=3.5cm] (pr) at (-2.1,.5) {Prompt holds only the rumour};
+\node[engine,text width=3.5cm] (ar) at (2.1,.5) {Prompt holds the plan};
+\node[external,text width=3.5cm] (po) at (-2.1,-.8) {Admits ignorance or repeats hearsay};
+\node[external,text width=3.5cm] (ao) at (2.1,-.8) {Role decides: answer or refuse};
+\draw[flow] (q.south -| p) -- (p);
+\draw[flow] (q.south -| a) -- (a);
+\draw[flow] (p) -- node[edgelabel,right]{filter, then rank} (pd);
+\draw[flow] (a) -- node[edgelabel,right]{filter, then rank} (ad);
+\draw[flow] (pd) -- (pr);
+\draw[flow] (ad) -- (ar);
+\draw[flow] (pr) -- (po);
+\draw[flow] (ar) -- (ao);
+\end{tikzpicture}
+\end{document}

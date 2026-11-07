@@ -39,7 +39,9 @@ def test_bad_uncertainty_shape_is_not_iterated(uncertainties):
 
 @pytest.mark.parametrize("status,content,code", [(503, b"", "cv_unavailable"),
     (200, b"x" * (128 * 1024 + 1), "cv_invalid_response"),
-    (200, b"not json", "cv_invalid_response"), (422, b"", "cv_invalid_response")])
+    (200, b"not json", "cv_invalid_response"), (422, b"", "cv_invalid_response"),
+    (422, b'{"detail":{"code":"INVALID_IMAGE","message":"x"}}', "cv_invalid_response"),
+    (422, b'{"detail":{"code":"BLANK_FRAME","message":"x"}}', "cv_blank_frame")])
 def test_http_errors_and_bounded_response(status, content, code):
     import asyncio
     import httpx

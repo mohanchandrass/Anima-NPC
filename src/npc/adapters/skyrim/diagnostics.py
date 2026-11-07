@@ -9,10 +9,25 @@ import sys
 LOGGER = logging.getLogger("npc.adapters.skyrim")
 
 
-def event(kind: str, **fields):
+VERBOSE = False
+
+
+def set_verbose(enabled: bool):
+    """Verbose mode adds full model prompts to the console AND the log file (they can hold dialogue and game state)."""
+    global VERBOSE
+    VERBOSE = bool(enabled)
+
+
+def event(kind: str, *, _limit: int = 1024, **fields):
     # JSON escapes newlines/ESC and keeps untrusted text on one terminal line.
-    values = " ".join(f"{key}={json.dumps(str(value)[:1024], ensure_ascii=True)}" for key, value in fields.items())
+    values = " ".join(f"{key}={json.dumps(str(value)[:_limit], ensure_ascii=True)}" for key, value in fields.items())
     LOGGER.info("%s %s", kind, values)
+
+
+def verbose_event(kind: str, *, _limit: int = 6000, **fields):
+    """Like event(), but emitted only with --verbose; console and file follow the same rule."""
+    if VERBOSE:
+        event(kind, _limit=_limit, **fields)
 
 
 def shutdown():
