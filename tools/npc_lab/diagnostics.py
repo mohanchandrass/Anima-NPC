@@ -23,6 +23,10 @@ class InspectableProvider:
     def __init__(self, provider):
         self.provider = provider
 
+    async def aclose(self):
+        if hasattr(self.provider, "aclose"):
+            await self.provider.aclose()
+
     async def generate(self, prompt, timeout_s):
         calls = _calls.get()
         if calls is not None and len(calls) < 2:

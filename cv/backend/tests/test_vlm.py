@@ -41,3 +41,16 @@ async def test_readiness_handles_missing_and_invalid_model_lists(payload, availa
                        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload)))
     ready, detail = await client.readiness()
     assert ready is available and detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("vram", [0, 50])
+async def test_vlm_warns_on_cpu_or_partial_offload(vram):
+    def respond(request):
+        if request.url.path == "/api/ps":
+            return httpx.Response(200, json={"models": [{"name": "fake", "size": 100, "size_vram": vram}]})
+        return httpx.Response(200, json={"response": '{"environment":{"description":"A room"}}'})
+    client = OllamaVLM("http://localhost:11434", "fake", 2, transport=httpx.MockTransport(respond))
+    with pytest.warns(RuntimeWarning, match="CV fake model is running on CPU"):
+        result, _ = await client.analyze(Image.new("RGB", (2, 2)), [])
+    assert result["environment"]["description"] == "A room"

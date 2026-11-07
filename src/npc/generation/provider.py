@@ -10,7 +10,7 @@ import httpx
 from pydantic import Field, SecretStr, StrictBool, ValidationError, model_validator
 
 from npc.contracts.context import Contract, Identifier
-from npc.contracts.dialogue import PromptPackage, ProviderReply
+from npc.contracts.dialogue import PromptPackage, ProviderReply, ResponseBody
 
 
 class ProviderFailure(Exception):
@@ -27,7 +27,7 @@ class ProviderConfig(Contract):
     base_url: str = Field(min_length=1, max_length=2048, repr=False)
     model: Identifier
     api_key: SecretStr = Field(repr=False)
-    response_format: Literal["json_object", "none"] = "json_object"
+    response_format: Literal["json_object", "json_schema", "none"] = "json_object"
     reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = None
     reasoning_enabled: StrictBool | None = None
 
@@ -78,6 +78,13 @@ class ChatCompletionsProvider:
                    "max_tokens": prompt.max_output_tokens, "stream": False}
         if self.config.response_format == "json_object":
             payload["response_format"] = {"type": "json_object"}
+        if self.config.response_format == "json_schema":
+            schema = ResponseBody.model_json_schema()
+            schema["required"] = list(schema["properties"])
+            for field in schema["properties"].values():
+                field.pop("default", None)
+            payload["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "npc_response", "strict": True, "schema": schema}}
         if self.config.reasoning_enabled is not None:
             payload["reasoning"] = {"enabled": self.config.reasoning_enabled}
         if self.config.reasoning_effort is not None:

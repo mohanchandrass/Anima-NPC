@@ -37,6 +37,8 @@ def setup(root: Path, *, python=sys.executable, version=None, run=subprocess.run
     from scripts.setup_chatterbox import install_torch
     install_torch(interpreter, command, probe=lambda args, **kwargs: run(args, cwd=root, **kwargs))
     command([interpreter, "-m", "pip", "install", "-r", root / "requirements.txt"])
+    from scripts.setup_chatterbox import install_onnx_gpu
+    install_onnx_gpu(interpreter, command)
     command([interpreter, "-m", "pip", "install", "-e", ".", "--no-deps", "--no-build-isolation"])
     command([interpreter, "-m", "pip", "check"])
     # Keep the app's existing private asset paths; the Git repository holds one

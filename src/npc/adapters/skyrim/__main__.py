@@ -159,6 +159,8 @@ def main():
             parser.exit(1, "Chatterbox model missing. Rerun setup_chatterbox.bat.\n")
         turbo = TurboWorker(root)
         app.state.tts_worker = turbo
+    if speech_engine is not None:
+        app.state.stt_worker = speech_engine
     if speech_engine is not None or turbo is not None:
         from .speech import create_speech_app
         app.mount("/v1/speech", create_speech_app(speech_engine,

@@ -47,12 +47,19 @@ class Session:
     screenshot: dict | None = None
     context_task: asyncio.Task | None = None
     opening_task: asyncio.Task | None = None
+    visual_task: asyncio.Task | None = None
     turn_task: asyncio.Task | None = None
     cancelled_tasks: set = field(default_factory=set)
     visual: VisualContext | None = None
     visual_revision: int = -1
     visual_time: float = 0
     visual_status: str = "disabled"
+    latency_request: str | None = None
+    latency_start: float = 0
+    staged_at: float = 0
+    latency_timings: dict = field(default_factory=dict)
+    latency_origin: str = "text_input"
+    tts_outcome: str = "not_requested"
     timings: dict = field(default_factory=dict)  # request_id -> stage record for TURN_TIMING, until emitted
 
 
@@ -63,7 +70,7 @@ TIMING_STAGES = ("stt_ms", "context_wait_ms", "retrieval_ms", "prompt_ms", "mode
 
 class Bridge:
     def __init__(self, settings: Settings, *, root: Path, capture=capture_client,
-                 client: httpx.AsyncClient | None = None, runner=None, microphone=None, clock=time.time, cv_client=None, audio=None):
+                 client: httpx.AsyncClient | None = None, runner=None, microphone=None, clock=time.time, cv_client=None, audio=None, timer=time.monotonic):
         self.settings, self.root = settings, root.resolve()
         self.output = self.resolve(settings.output_directory)
         self.game = self.resolve(settings.game_directory)
@@ -93,6 +100,7 @@ class Bridge:
         self.session: Session | None = None
         self.ended = deque(maxlen=16)
         self.clock = clock
+        self.timer = timer
         self.error: str | None = None
         self._background: set[asyncio.Task] = set()
         self._microphone_task: asyncio.Task | None = None
@@ -252,6 +260,12 @@ class Bridge:
                 if record is not None and "staged_at" in record:
                     self._stage(session, command["request_id"], "native_start_ms", record["staged_at"])
                     self._timing_done(session, command["request_id"], event.status)
+            if (not retired and event.status == "started" and session.latency_request == command["request_id"]
+                    and "delivery_wait" not in session.latency_timings):
+                session.latency_timings["delivery_wait"] = max(0, (self.timer() - session.staged_at) * 1000)
+                key = "playback_start_receipt" if command.get("audio_file") or event.delivery_id in self._playback else "subtitle_start_receipt"
+                session.latency_timings[key] = max(0, (self.timer() - session.latency_start) * 1000)
+                self.log_latency(session, command["request_id"], "started")
             log_event("NATIVE_ACK", session=event.session_id, request=command["request_id"],
                       delivery=event.delivery_id, status=event.status, reason=event.reason or "unreported",
                       audio=event.audio or "unreported", heard="unverified",
@@ -418,6 +432,8 @@ class Bridge:
 
     async def end(self, session):
         self.invalidate(session)
+        if session.visual_task and not session.visual_task.done():
+            session.visual_task.cancel()
         if session.context_task and not session.context_task.done():
             session.context_task.cancel()
         if self._microphone_task and not self._microphone_task.done():
@@ -454,12 +470,30 @@ class Bridge:
         return envelope
 
     async def publish_context(self, session, kind):
+        if self.settings.capture_screenshots and (session.visual_task is None or session.visual_task.done()):
+            session.visual_task = self.spawn(self.refresh_visual(session))
+        if self.session is not session:
+            return
+        # Publish trusted context independently of optional background capture/analysis.
+        event = session.event
+        profile = profile_for(event.snapshot, self.profiles, self.rules)
+        await self.publish({"kind": kind, "session_id": event.session_id,
+                            "game_epoch": event.game_epoch, "npc_id": npc_id(event.snapshot),
+                            "revision": session.revision, "game": event.snapshot.model_dump(mode="json"),
+                            "npc_profile": profile.model_dump(mode="json"),
+                            "knowledge_status": "authored" if profile.knowledge_sources else "unknown",
+                            "screenshot": session.screenshot, "image_description": self.visual_payload(session)})
+
+    async def refresh_visual(self, session):
         event = session.event
         revision = session.revision
         captured_time = self.clock()
         if self.settings.capture_screenshots:
             try:
                 path = await asyncio.to_thread(self.artifacts.screenshot, uuid.uuid4().hex, event.game_pid)
+                if self.session is not session or session.revision != revision:
+                    session.visual_status = "stale"
+                    return
                 session.screenshot = {"path": path, "viewpoint": "player_camera", "status": "saved",
                                       "captured_at": datetime.now(timezone.utc).isoformat(),
                                       "npc_visibility": "unknown", "event_id": event.event_id}
@@ -472,7 +506,8 @@ class Bridge:
                             raise ValueError("CV image exceeds upload budget")
                         async with asyncio.timeout(self.settings.cv_timeout_s):
                             visual = await self.cv_client.analyze(image, "image/png")
-                        if self.session is session and session.revision == revision:
+                        if (self.session is session and session.revision == revision
+                                and 0 <= self.clock() - captured_time < self.settings.visual_ttl_s):
                             session.visual = visual.model_copy(update={
                                 "captured_at": datetime.fromisoformat(session.screenshot["captured_at"])})
                             session.visual_revision = revision
@@ -487,21 +522,10 @@ class Bridge:
                 session.screenshot = {"status": "unavailable", "viewpoint": "player_camera"}
                 session.visual = None
                 session.visual_status = "unavailable"
-        if self.session is not session:
-            return
-        # Use latest coalesced snapshot after capture, while preserving frame provenance.
-        event = session.event
-        profile = profile_for(event.snapshot, self.profiles, self.rules)
-        await self.publish({"kind": kind, "session_id": event.session_id,
-                            "game_epoch": event.game_epoch, "npc_id": npc_id(event.snapshot),
-                            "revision": session.revision, "game": event.snapshot.model_dump(mode="json"),
-                            "npc_profile": profile.model_dump(mode="json"),
-                            "knowledge_status": "authored" if profile.knowledge_sources else "unknown",
-                            "screenshot": session.screenshot, "image_description": self.visual_payload(session)})
 
     def visual_reference(self, session):
-        if (session.visual is not None and session.visual_revision == session.revision
-                and 0 <= self.clock() - session.visual_time <= self.settings.visual_ttl_s):
+        if (self.session is session and session.visual is not None and session.visual_revision == session.revision
+                and 0 <= self.clock() - session.visual_time < self.settings.visual_ttl_s):
             return session.visual
         return None
 
@@ -509,7 +533,7 @@ class Bridge:
         visual = self.visual_reference(session)
         return visual.model_dump(mode="json") if visual else None
 
-    async def player_input(self, speech: SpeechInput, *, interrupt=False, stt_ms=None):
+    async def player_input(self, speech: SpeechInput, *, interrupt=False, speech_end=None, stt_ms=None):
         session = self.current(speech.session_id)
         fingerprint = speech.model_dump(exclude={"session_id", "input_id"})
         if speech.input_id in session.inputs:
@@ -541,6 +565,11 @@ class Bridge:
                 return {"request_id": speech.input_id, "status": "duplicate_recorded_turn"}
             log_event("SOCIAL_STATE", request=speech.input_id, revision=state["revision"], mood=state["mood"],
                       stimulus=audit["stimulus"], memory_exchanges=len(state["history"]))
+        session.latency_request = speech.input_id
+        session.latency_start = self.timer() if speech_end is None else speech_end
+        session.latency_origin = "text_input" if speech_end is None else "speech_end"
+        session.latency_timings = {"stt": stt_ms or 0, "cv_wait": 0.0}
+        session.tts_outcome = "not_requested"
         session.input_payloads[speech.input_id] = fingerprint
         session.request_id = speech.input_id
         session.deadline = self.clock() + self.settings.timeout_s
@@ -563,10 +592,11 @@ class Bridge:
                 async with asyncio.timeout(max(0.001, session.deadline - self.clock())):
                     await asyncio.shield(asyncio.gather(*previous, return_exceptions=True))
             session.cancelled_tasks = {task for task in session.cancelled_tasks if not task.done()}
-            # Screenshots only feed the CV service: without one, a turn never waits for a capture.
-            if session.context_task and self.cv_client is not None:
+            context_wait = self.timer()
+            if session.context_task:
                 async with asyncio.timeout(max(0.001, session.deadline - self.clock())):
                     await asyncio.shield(session.context_task)
+            session.latency_timings["context_wait"] = max(0, (self.timer() - context_wait) * 1000)
             self._stage(session, speech.input_id, "context_wait_ms", waited)
             if self.session is not session or session.request_id != speech.input_id:
                 return
@@ -606,11 +636,14 @@ class Bridge:
                             record[name + "_ms"] = value
                         record["turn_type"] = getattr(preview, "turn_type", None) or "none"
                         record["move"] = getattr(getattr(preview, "plan", None), "move", None) or "none"
+                    session.latency_timings.update(getattr(preview, "stage_ms", {}))
                     log_event("PIPELINE_RESULT", session=speech.session_id, request=speech.input_id,
                               route=getattr(getattr(preview, "plan", None), "route", "unknown"),
                               status=getattr(preview, "status", "unknown"),
                               turn_type=getattr(preview, "turn_type", None), move=getattr(getattr(preview, "plan", None), "move", None),
-                              model=getattr(preview, "model", None), calls=getattr(preview, "model_calls", 0))
+                              model=getattr(preview, "model", None), calls=getattr(preview, "model_calls", 0),
+                              repair_attempted=getattr(preview, "model_calls", 0) == 2, stage_ms=getattr(preview, "stage_ms", {}),
+                              input_tokens=getattr(preview, "input_tokens", 0), output_tokens=getattr(preview, "output_tokens", 0))
                     if preview.response:
                         await self.result(PipelineResult(session_id=speech.session_id, request_id=speech.input_id,
                                                         npc_id=scenario.turn.npc_id, mode=preview.response.mode,
@@ -620,6 +653,7 @@ class Bridge:
                         raise ConnectionError("pipeline returned no deliverable response")
         except asyncio.CancelledError:
             session.inputs[speech.input_id] = "cancelled"
+            self.log_latency(session, speech.input_id, "cancelled")
             log_event("TURN_CANCELLED", session=speech.session_id, request=speech.input_id)
             self._timing_done(session, speech.input_id, "cancelled")
             raise
@@ -628,6 +662,7 @@ class Bridge:
             if session.request_id == speech.input_id:
                 session.request_id = None
             self.error = "pipeline_turn_failed"
+            self.log_latency(session, speech.input_id, "failed")
             log_event("TURN_FAILED", session=speech.session_id, request=speech.input_id, error=self.error)
             self._timing_done(session, speech.input_id, "failed")
         except Exception:
@@ -654,13 +689,17 @@ class Bridge:
         if record is not None and "pipeline_ms" not in record and "published_at" in record:
             self._stage(session, result.request_id, "pipeline_ms", record["published_at"])
         tts_began = self.clock()
+        session.latency_timings["validated_response_ready"] = max(0, (self.timer() - session.latency_start) * 1000)
+        session.tts_outcome = "subtitle_fallback" if result.text and self.settings.tts_url and not result.audio_path else "not_requested"
+        session.latency_timings["tts"] = 0.0
         try:
             if result.audio_path:
                 raw = await asyncio.to_thread(read_audio, result.audio_path, self.audio_root)
-            elif result.text and self.settings.tts_url:
+            elif result.text and self.settings.tts_url and session.deadline - self.clock() > 0.5:
+                tts_started = self.timer()
                 try:
                     # Leave time to deliver a text-only result if synthesis fails.
-                    async with asyncio.timeout(max(0.001, session.deadline - self.clock() - 0.5)):
+                    async with asyncio.timeout(max(0.001, min(self.settings.tts_timeout_s, session.deadline - self.clock() - 0.5))):
                         speech_request = {
                             "request_id": result.request_id, "text": result.text,
                             "voice": session.event.snapshot.npc.voice.model_dump() if session.event.snapshot.npc.voice else None,
@@ -682,6 +721,9 @@ class Bridge:
                     raw = None
                     self.error = "tts_unavailable_text_only"
                     log_event("TTS_FAILED", request=result.request_id, fallback="text_only")
+                finally:
+                    session.latency_timings["tts"] = max(0, (self.timer() - tts_started) * 1000)
+                    session.tts_outcome = "ready" if raw else "subtitle_fallback"
             self._stage(session, result.request_id, "tts_ms", tts_began)
             staging_began = self.clock()
             if (self.session is not session or session.request_id != result.request_id
@@ -726,6 +768,10 @@ class Bridge:
             if playback:
                 self._drop_playback()  # a new delivery replaces whatever was still playing
                 self._playback[delivery_id] = {"path": playback, "seconds": duration - PLAYBACK_PAD_S, **({"standby": True} if say else {})}
+            session.staged_at = self.timer()
+            session.latency_timings["response_staged"] = max(0, (session.staged_at - session.latency_start) * 1000)
+            session.delivery_status = "pending"
+            self.log_latency(session, result.request_id, "staged")
             log_event("OUTPUT_STAGED", session=result.session_id, request=result.request_id,
                       delivery=delivery_id, npc=result.npc_id, mode=result.mode, text=result.text,
                       audio=bool(raw), delivered=False)
@@ -739,6 +785,13 @@ class Bridge:
             if session.request_id == result.request_id:
                 session.inputs[result.request_id] = "pending"
             raise
+
+    def log_latency(self, session, request_id, status):
+        if session.latency_request == request_id:
+            log_event("TURN_LATENCY", session=session.event.session_id, request=request_id,
+                      origin=session.latency_origin, status=status, stage_ms=session.latency_timings,
+                      elapsed_ms=max(0, (self.timer() - session.latency_start) * 1000),
+                      tts=session.tts_outcome)
 
     def command(self, session_id):
         session = self.current(session_id)
@@ -767,6 +820,7 @@ class Bridge:
         await self.finish_listening(session)
 
     async def finish_listening(self, session):
+        speech_end = self.timer()
         async with self._mic_gate:
             if not self.microphone.active:
                 return
@@ -776,16 +830,24 @@ class Bridge:
         if self.session is not session:
             return
         wav_duration(raw)
-        stt_began = self.clock()
-        async with self.client.stream("POST", self.settings.stt_url, content=raw,
-                                      headers={"Content-Type": "audio/wav"}) as response:
-            response.raise_for_status()
-            body = bytearray()
-            async for chunk in response.aiter_bytes():
-                body.extend(chunk)
-                if len(body) > 16384:
-                    raise ConnectionError("STT response too large")
-            parsed = json.loads(body)
-        await self.player_input(SpeechInput(session_id=session.event.session_id, input_id=uuid.uuid4().hex,
-                                            text=parsed["text"], confidence=parsed.get("confidence", 1), source="stt"),
-                                 interrupt=True, stt_ms=round((self.clock() - stt_began) * 1000, 1))
+        input_id = uuid.uuid4().hex
+        try:
+            async with self.client.stream("POST", self.settings.stt_url, content=raw,
+                                          headers={"Content-Type": "audio/wav"}) as response:
+                response.raise_for_status()
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > 16384:
+                        raise ConnectionError("STT response too large")
+                parsed = json.loads(body)
+            utterance = SpeechInput(session_id=session.event.session_id, input_id=input_id,
+                                    text=parsed["text"], confidence=parsed.get("confidence", 1), source="stt")
+        except BaseException:
+            log_event("STT_LATENCY", session=session.event.session_id, request=input_id,
+                      status="failed_or_cancelled", elapsed_ms=max(0, (self.timer() - speech_end) * 1000))
+            raise
+        log_event("STT_LATENCY", session=session.event.session_id, request=input_id,
+                  status="ready", elapsed_ms=max(0, (self.timer() - speech_end) * 1000))
+        await self.player_input(utterance, interrupt=True, speech_end=speech_end,
+                                stt_ms=max(0, (self.timer() - speech_end) * 1000))

@@ -31,6 +31,8 @@ def test_connector_auto_enables_prepared_turbo_and_owns_worker_lifecycle(tmp_pat
     monkeypatch.setattr(sys,'argv',['connector','--config',str(config)])
     monkeypatch.setattr(entry,'Bridge',Bridge)
     monkeypatch.setattr('npc.adapters.skyrim.whisper.prepare_model',lambda root: None)
+    async def start(self): pass
+    monkeypatch.setattr('npc.adapters.skyrim.speech.WhisperSpeech.start', start)
     monkeypatch.setattr('npc.output.chatterbox.model_path',lambda root: tmp_path)
     monkeypatch.setattr('npc.output.chatterbox.TurboWorker',Worker)
     def serve(app,**kwargs):

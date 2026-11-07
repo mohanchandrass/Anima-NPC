@@ -40,7 +40,7 @@ class YoloDetector:
             return self.requested_device
         try:
             import torch
-            return "mps" if torch.backends.mps.is_available() else "cpu"
+            return "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         except ImportError:
             return "cpu"
 
@@ -51,6 +51,9 @@ class YoloDetector:
             from ultralytics import YOLO
             self._model = YOLO(self.model_name)
             self._device = self._resolve_device()
+            if self._device == "cpu":
+                import warnings
+                warnings.warn(f"YOLO {self.model_name} model is running on CPU.", RuntimeWarning)
         except Exception as exc:
             raise DetectorUnavailableError(f"YOLO model '{self.model_name}' could not be loaded: {exc}") from exc
 
@@ -68,6 +71,14 @@ class YoloDetector:
             result = self._model.predict(image, conf=self.confidence, imgsz=self.image_size, device=self._device, verbose=False)[0]
             names = result.names
             detections = [Detection(class_id=int(box.cls[0]), label=str(names[int(box.cls[0])]), confidence=float(box.conf[0]), bbox_xyxy=tuple(float(v) for v in box.xyxy[0].tolist())) for box in result.boxes]
+        except RuntimeError as exc:
+            if self._device != "cpu":
+                self._device = "cpu"
+                self._model.to("cpu")
+                import warnings
+                warnings.warn(f"YOLO {self.model_name} model is running on CPU (GPU inference failed).", RuntimeWarning)
+                return self.detect(image)
+            raise DetectorUnavailableError(f"YOLO inference failed: {exc}") from exc
         except Exception as exc:
             raise DetectorUnavailableError(f"YOLO inference failed: {exc}") from exc
         annotated = image.copy()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import base64, json, time
 import asyncio
+import warnings
 from io import BytesIO
 import httpx
 from PIL import Image
@@ -53,6 +54,18 @@ class OllamaVLM:
             raise VLMUnavailableError("Ollama request timed out.") from exc
         except httpx.HTTPError as exc:
             raise VLMUnavailableError("Configured local VLM provider is unavailable.") from exc
+        # Ollama chooses GPU offload automatically; report actual CPU/partial offload.
+        try:
+            async with httpx.AsyncClient(timeout=3, trust_env=False, transport=self.transport) as client:
+                status = await client.get(f"{self.host}/api/ps")
+                status.raise_for_status()
+                running = next((m for m in status.json().get("models", []) if m.get("name") == self.model), None)
+                if running is not None and running.get("size_vram", 0) < running.get("size", 0):
+                    warnings.warn(f"CV {self.model} model is running on CPU (fully or partially; GPU memory/runtime fallback).", RuntimeWarning)
+                elif running is None:
+                    warnings.warn(f"CV {self.model} device placement could not be verified.", RuntimeWarning)
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+            warnings.warn(f"CV {self.model} device placement could not be verified.", RuntimeWarning)
         try:
             parsed = json.loads(content)
             if not isinstance(parsed, dict): raise ValueError("not an object")

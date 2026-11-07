@@ -55,7 +55,18 @@ def load_model(path, device="auto"):
     torch.set_grad_enabled(False)
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    return ChatterboxTurboTTS.from_local(path, device=device)
+    import warnings
+    try:
+        model = ChatterboxTurboTTS.from_local(path, device=device)
+    except (RuntimeError, OSError):
+        if device != "cuda":
+            raise
+        torch.cuda.empty_cache()
+        device = "cpu"
+        model = ChatterboxTurboTTS.from_local(path, device=device)
+    if device == "cpu":
+        warnings.warn("Chatterbox Turbo model is running on CPU (GPU unavailable or insufficient memory).", RuntimeWarning)
+    return model
 
 
 def pcm_wav(samples, rate):
@@ -124,7 +135,16 @@ def worker(root, device):
     with redirect_stdout(sys.stderr):
         engine = TurboEngine(root, load_model(model_path(root), device))
         # Warm lazy audio kernels before admitting deadline-bound NPC requests.
-        pcm_wav(engine.model.generate("Ready.").detach().cpu().numpy(), engine.model.sr)
+        try:
+            pcm_wav(engine.model.generate("Ready.").detach().cpu().numpy(), engine.model.sr)
+        except RuntimeError:
+            if not str(engine.model.device).startswith("cuda"):
+                raise
+            del engine
+            import torch
+            torch.cuda.empty_cache()
+            engine = TurboEngine(root, load_model(model_path(root), "cpu"))
+            pcm_wav(engine.model.generate("Ready.").detach().cpu().numpy(), engine.model.sr)
     print(json.dumps({"ready": True}), flush=True)
     while line := sys.stdin.buffer.readline(16385):
         if len(line) > 16384:
@@ -132,7 +152,16 @@ def worker(root, device):
         try:
             request = TurboRequest.model_validate_json(line)
             with redirect_stdout(sys.stderr):
-                raw = engine.synthesize(request)
+                try:
+                    raw = engine.synthesize(request)
+                except RuntimeError:
+                    if not str(engine.model.device).startswith("cuda"):
+                        raise
+                    del engine
+                    import torch
+                    torch.cuda.empty_cache()
+                    engine = TurboEngine(root, load_model(model_path(root), "cpu"))
+                    raw = engine.synthesize(request)
             reply = {"request_id": request.request_id, "wav": base64.b64encode(raw).decode("ascii")}
         except Exception as error:
             reply = {"error": type(error).__name__}
@@ -187,7 +216,7 @@ class TurboWorker:
                        "HF_HOME": str(self.root / "data/tts/hf")}
         self.process = await self.launch(sys.executable, "-m", "npc.output.chatterbox", "--worker",
             "--root", str(self.root), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, limit=MAX_REPLY, env=environment)
+            stderr=None, limit=MAX_REPLY, env=environment)
         try:
             async with asyncio.timeout(120):
                 ready = json.loads(await self.process.stdout.readline())

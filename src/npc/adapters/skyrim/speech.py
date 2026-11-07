@@ -117,27 +117,95 @@ class WindowsSpeech:
 
 
 class WhisperSpeech(WindowsSpeech):
-    """Reuse bounded worker/cleanup; Windows TTS remains opt-in and unchanged."""
+    """Resident GPU-first Whisper with bounded admission and process cancellation."""
 
-    stt_engine = "Whisper base.en CPU INT8"
+    stt_engine = "Whisper small.en (starting)"
     tts_engine = "Windows SAPI"
 
     def __init__(self, directory, root, **kwargs):
         super().__init__(directory, **kwargs)
         self.root = root
 
-    def worker_command(self, operation, request):
-        if operation == "stt":
-            return [sys.executable, "-m", "npc.adapters.skyrim.whisper",
-                    "--root", str(self.root), "--request", str(request)]
-        return super().worker_command(operation, request)
-
     async def start(self):
-        pass
+        if not hasattr(self, "worker"):
+            self.worker = WhisperWorker(self.root, timeout_s=self.timeout_s, launch=self.launch)
+        await self.worker.start()
+        self.stt_engine = "Whisper small.en " + self.worker.device
 
     async def close(self):
-        pass
+        if hasattr(self, "worker"):
+            await self.worker.close()
 
+    @asynccontextmanager
+    async def _audio_directory(self, worker):
+        with tempfile.TemporaryDirectory(dir=self.directory) as directory:
+            try:
+                yield directory
+            except BaseException:
+                await worker._stop_process()
+                raise
+
+    async def transcribe(self, raw):
+        if wav_duration(raw) > 16:
+            raise SpeechFailure("microphone_audio_limit")
+        if not hasattr(self, "worker"):
+            await self.start()
+        worker = self.worker
+        if worker.busy or (worker._recovery and not worker._recovery.done()):
+            raise SpeechFailure("speech_busy")
+        worker.busy = True
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            async with self._audio_directory(worker) as directory:
+                path = Path(directory) / "input.wav"
+                path.write_bytes(raw)
+                async with asyncio.timeout(self.timeout_s):
+                    await worker.start()
+                    worker.process.stdin.write(json.dumps({"input": str(path)}).encode() + b"\n")
+                    await worker.process.stdin.drain()
+                    reply = json.loads(await worker.process.stdout.readline())
+                    text, confidence = reply.get("text"), reply.get("confidence")
+                    if (not isinstance(text, str) or not text.strip() or len(text) > 4000
+                            or isinstance(confidence, bool) or not isinstance(confidence, (int, float))
+                            or not 0 <= confidence <= 1):
+                        raise SpeechFailure("invalid_transcript")
+                    worker.device = reply.get("device", worker.device)
+                    self.stt_engine = "Whisper small.en " + worker.device
+                    return {"text": text, "confidence": confidence}
+        except BaseException:
+            await worker._stop_process()
+            if not worker._closed:
+                worker._recovery = asyncio.create_task(worker._recover())
+            raise
+        finally:
+            worker.busy = False
+
+
+from npc.output.chatterbox import TurboWorker
+
+
+class WhisperWorker(TurboWorker):
+    device = "unknown"
+
+    async def start(self):
+        if self._closed:
+            raise SpeechFailure("Whisper worker closed")
+        if self.ready and self.process and self.process.returncode is None:
+            return
+        self.process = await self.launch(sys.executable, "-m", "npc.adapters.skyrim.whisper",
+            "--root", str(self.root), "--worker", stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE, stderr=None, limit=16384,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        try:
+            async with asyncio.timeout(120):
+                reply = json.loads(await self.process.stdout.readline())
+                if reply.get("ready") is not True or reply.get("device") not in {"cpu", "cuda"}:
+                    raise SpeechFailure("Whisper worker failed readiness")
+                self.device = reply["device"]
+                self.ready = True
+        except BaseException:
+            await self._stop_process()
+            raise
 
 class _WarmPiper:
     def __init__(self, process, work):
@@ -319,16 +387,21 @@ class PiperSpeech(WhisperSpeech):
             shutil.rmtree(entry.work, ignore_errors=True)
 
     async def close(self):
-        while self._warm:
-            await self._discard(self._warm.popitem()[1])
+        try:
+            while self._warm:
+                await self._discard(self._warm.popitem()[1])
+        finally:
+            await super().close()
 
 
 def create_speech_app(engine, *, tts_enabled=True, turbo=None):
     @asynccontextmanager
     async def lifespan(app):
-        if turbo:
-            await turbo.start()
+        if isinstance(engine, WhisperSpeech):
+            await engine.start()
         try:
+            if turbo:
+                await turbo.start()
             yield
         finally:
             if turbo:
@@ -409,6 +482,16 @@ def create_speech_app(engine, *, tts_enabled=True, turbo=None):
             return JSONResponse({"error": "stt_external"}, status_code=503)
         if request.headers.get("content-type", "").split(";")[0] != "audio/wav":
             return JSONResponse({"error": "audio_wav_required"}, status_code=415)
-        return await engine.transcribe(await request.body())
+        work = asyncio.create_task(engine.transcribe(await request.body()))
+        try:
+            while not work.done():
+                await asyncio.wait({work}, timeout=.1)
+                if await request.is_disconnected():
+                    raise asyncio.CancelledError()
+            return await work
+        finally:
+            if not work.done():
+                work.cancel()
+            await asyncio.gather(work, return_exceptions=True)
 
     return app

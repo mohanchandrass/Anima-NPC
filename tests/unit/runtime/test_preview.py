@@ -318,3 +318,41 @@ def test_stage_timings_cover_prompt_model_and_validation(scenario_data):
     result = asyncio.run(PreviewRunner(ScriptedProvider(VALID)).run(generating(scenario_data)))
     assert {"prompt", "model", "validation"} <= set(result.stage_ms)
     assert all(value >= 0 for value in result.stage_ms.values())
+def test_stage_timings_separate_generation_and_repair(scenario_data):
+    now = [0.0]
+    class Provider(ScriptedProvider):
+        async def generate(self, prompt, timeout_s):
+            now[0] += .05 if not self.calls else .03
+            return await super().generate(prompt, timeout_s)
+    provider = Provider("bad json", VALID)
+    result = asyncio.run(PreviewRunner(provider, clock=lambda: now[0]).run(generating(scenario_data)))
+    assert result.stage_ms["generation"] == pytest.approx(50)
+    assert result.stage_ms["repair"] == pytest.approx(30)
+    assert result.stage_ms["retrieval"] == 0
+    assert result.elapsed_ms == pytest.approx(80)
+    assert result.status == "repair_success" and result.model_calls == 2
+
+
+def test_provider_timeout_retains_stage_time(scenario_data):
+    now = [0.0]
+    class Provider:
+        async def generate(self, prompt, timeout_s):
+            now[0] += .2
+            raise ProviderFailure("provider_timeout")
+    result = asyncio.run(PreviewRunner(Provider(), clock=lambda: now[0]).run(generating(scenario_data)))
+    assert result.stage_ms["generation"] == pytest.approx(200)
+    assert result.status == "error_fallback" and result.model_calls == 1
+
+
+def test_prompt_budget_failure_retains_construction_time(scenario_data, monkeypatch):
+    from npc.generation.prompt import PromptTooLarge
+    now = [0.0]
+    def oversized(*args, **kwargs):
+        now[0] += .05
+        raise PromptTooLarge("required context too large")
+    monkeypatch.setattr("npc.runtime.preview.build_prompt", oversized)
+    provider = ScriptedProvider(VALID)
+    result = asyncio.run(PreviewRunner(provider, clock=lambda: now[0]).run(generating(scenario_data)))
+    assert result.error_code == "prompt_budget" and result.model_calls == 0
+    assert result.stage_ms["prompt"] == pytest.approx(50)
+    assert result.stage_ms["generation"] == 0

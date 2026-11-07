@@ -40,7 +40,13 @@ def main() -> int:
         provider = load_provider(args.config) if args.live else OfflineProvider()
         if args.live:
             print("Live mode: supplied NPC/player context may leave this machine and incur API charges.", file=sys.stderr)
-        result = asyncio.run(PreviewRunner(provider, limits, retriever=retriever).run(scenario))
+        async def run():
+            try:
+                return await PreviewRunner(provider, limits, retriever=retriever).run(scenario)
+            finally:
+                if hasattr(provider, "aclose"):
+                    await provider.aclose()
+        result = asyncio.run(run())
     except ConfigurationFailure as error:
         print(f"Configuration error: {error}", file=sys.stderr)
         return 2

@@ -174,6 +174,7 @@ class Settings(Contract):
     timeout_s: float = Field(default=30, ge=1, le=60)
     # Real-time profile: a model call slower than this is abandoned and retried once (transient failures only).
     model_cutoff_s: float = Field(default=4, ge=0.5, le=30)
+    tts_timeout_s: float = Field(default=4, ge=0.1, le=20)
     capture_screenshots: bool = True
     max_screenshots: int = Field(default=100, ge=1, le=1000)
     max_output_bytes: int = Field(default=250 * 1024 * 1024, ge=1024, le=2 * 1024**3)

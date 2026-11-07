@@ -66,6 +66,8 @@ def wav(seconds=0.2, value=4000):
 async def ready(bridge):
     await bridge.game_event(event())
     await bridge.session.context_task
+    if bridge.session.visual_task:
+        await bridge.session.visual_task
 
 
 async def pending(bridge):
@@ -472,6 +474,8 @@ def test_cli_overrides_enable_connected_path_without_rewriting_config(tmp_path, 
     from fastapi.testclient import TestClient
     from npc.adapters.skyrim.__main__ import main
     monkeypatch.setattr("npc.adapters.skyrim.whisper.prepare_model", lambda root: None)
+    async def start(self): pass
+    monkeypatch.setattr("npc.adapters.skyrim.speech.WhisperSpeech.start", start)
     profile = tmp_path / "offline.yaml"; profile.write_text("provider: offline\n")
     config = tmp_path / "connector.json"
     original = settings(tmp_path, pipeline_mode="preview", provider_profile=str(profile)).model_dump_json()
@@ -505,6 +509,7 @@ def test_vision_failure_keeps_text_pipeline_usable(tmp_path, failure):
         try:
             await pending(bridge)
             assert bridge.session.visual is None
+            if bridge.session.visual_task: await bridge.session.visual_task
             assert bridge.session.visual_status == "unavailable"
             assert bridge.command("session-a")["text"]
         finally: await bridge.close()
@@ -531,15 +536,18 @@ def test_visual_frame_is_bound_to_revision_ttl_and_session(tmp_path):
             await bridge.game_event(event("snapshot", 2, state_revision=2))
             vision.finish.set()
             await bridge.session.context_task
+            await bridge.session.visual_task
             assert bridge.session.visual is None
             assert bridge.session.visual_status == "stale"
             await bridge.publish_context(bridge.session, "context_updated")
+            await bridge.session.visual_task
             assert bridge.visual_reference(bridge.session).environment == "Old room"
             now[0] += 16
             assert bridge.visual_reference(bridge.session) is None
             await bridge.game_event(event().model_copy(update={"session_id": "session-b", "game_epoch": "load-b"}))
             assert bridge.session.visual is None
             await bridge.session.context_task
+            await bridge.session.visual_task
             assert bridge.session.visual_revision == 1
         finally: await bridge.close()
     asyncio.run(run())
@@ -582,6 +590,8 @@ def test_capture_vlm_rag_generation_delivery_roundtrip(tmp_path, attach):
             return ProviderReply(content='{"mode":"speech","text":"The healer works at the eastern gate.","cue":null,"evidence_ids":["kb1"]}',
                                  model="fake", finish_reason="stop", input_tokens=20, output_tokens=10)
     def model(request):
+        if request.url.path == "/api/ps":
+            return httpx.Response(200, json={"models": [{"name": "fake-vlm", "size": 1, "size_vram": 1}]})
         vlm_requests.append(json.loads(request.content))
         return httpx.Response(200, json={"response": json.dumps({"environment": {"description": "A stone room"},
             "uncertainties": ["NPC visibility unknown"]})})
@@ -912,4 +922,149 @@ def test_social_memory_key_survives_a_new_game_epoch_by_default(tmp_path):
                 await bridge.close()
             keys.append(run_keys)
         assert keys[0][0] == keys[0][1] and keys[1][0] != keys[1][1]
+def test_slow_cv_does_not_block_turn_and_expired_result_is_discarded(tmp_path):
+    from npc.vision import VisualContext
+    from npc.runtime.preview import PreviewRunner
+    from npc.generation.provider import OfflineProvider
+    class Vision:
+        def __init__(self): self.started = asyncio.Event(); self.release = asyncio.Event()
+        async def analyze(self, *args):
+            self.started.set()
+            await self.release.wait()
+            return VisualContext(id="late", captured_at=datetime.now(timezone.utc), environment="Late room")
+    async def run():
+        now = [time.time()]
+        vision = Vision()
+        config = settings(tmp_path, pipeline_mode="preview", attach_visual_reference=True).model_copy(update={"capture_screenshots": True})
+        bridge = Bridge(config, root=tmp_path, clock=lambda: now[0], cv_client=vision,
+                        capture=lambda _: png_from_bgra(1, 1, b"\0\0\0\xff"), runner=PreviewRunner(OfflineProvider()))
+        try:
+            await bridge.game_event(event())
+            await vision.started.wait()
+            await bridge.player_input(speech().model_copy(update={"text": "Hello"}))
+            await asyncio.wait_for(bridge.session.turn_task, 1)
+            assert bridge.command("session-a")["text"]
+            assert not bridge.session.visual_task.done()
+            now[0] += config.visual_ttl_s
+            vision.release.set()
+            await bridge.session.visual_task
+            assert bridge.visual_reference(bridge.session) is None
+            assert bridge.session.visual_status == "stale"
+        finally:
+            await bridge.close()
+    asyncio.run(run())
+
+
+def test_closing_session_cancels_background_cv(tmp_path):
+    class Vision:
+        def __init__(self): self.started = asyncio.Event(); self.cancelled = asyncio.Event()
+        async def analyze(self, *args):
+            self.started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                self.cancelled.set()
+    async def run():
+        vision = Vision()
+        bridge = Bridge(settings(tmp_path).model_copy(update={"capture_screenshots": True}), root=tmp_path,
+            cv_client=vision, capture=lambda _: png_from_bgra(1, 1, b"\0\0\0\xff"))
+        try:
+            await bridge.game_event(event())
+            await vision.started.wait()
+            session = bridge.session
+            await bridge.end(session)
+            await asyncio.wait_for(vision.cancelled.wait(), 1)
+            assert bridge.visual_reference(session) is None
+        finally:
+            await bridge.close()
+    asyncio.run(run())
+
+
+def test_short_tts_budget_falls_back_and_cancels_synthesis(tmp_path):
+    cancelled = []
+    async def slow(request):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.append(True)
+    async def run():
+        config = settings(tmp_path, tts_url="http://localhost:9999/tts", tts_timeout_s=.1)
+        bridge = Bridge(config, root=tmp_path, client=httpx.AsyncClient(transport=httpx.MockTransport(slow)))
+        try:
+            await pending(bridge)
+            await asyncio.wait_for(bridge.result(result()), .8)
+            command = bridge.command("session-a")
+            assert command["text"] == "Good day." and command["audio_file"] is None
+            assert cancelled == [True]
+            assert bridge.session.tts_outcome == "subtitle_fallback"
+            assert 50 <= bridge.session.latency_timings["tts"] < 800
+        finally:
+            await bridge.close()
+    asyncio.run(run())
+
+
+def test_speech_end_latency_includes_stt_and_native_delivery_wait(tmp_path):
+    async def run():
+        now = [10.2]
+        bridge = Bridge(settings(tmp_path), root=tmp_path, timer=lambda: now[0])
+        try:
+            await ready(bridge)
+            await bridge.player_input(speech(), speech_end=10.0, stt_ms=200)
+            await bridge.session.turn_task
+            await bridge.result(result())
+            assert bridge.session.latency_timings["stt"] == 200
+            assert bridge.session.latency_timings["response_staged"] == pytest.approx(200)
+            command = bridge.command("session-a")
+            now[0] += .1
+            await bridge.game_event(event("delivery", 2, delivery_id=command["delivery_id"], status="started"))
+            assert bridge.session.latency_timings["delivery_wait"] == pytest.approx(100)
+            assert bridge.session.latency_timings["subtitle_start_receipt"] == pytest.approx(300)
+            assert "playback_start_receipt" not in bridge.session.latency_timings
+            assert bridge.session.latency_origin == "speech_end"
+        finally:
+            await bridge.close()
+    asyncio.run(run())
+
+
+def test_audio_start_timing_is_distinct_from_subtitle_start(tmp_path):
+    async def run():
+        now = [1.0]
+        bridge = Bridge(settings(tmp_path), root=tmp_path, timer=lambda: now[0])
+        bridge.audio_root.mkdir()
+        (bridge.audio_root / "line.wav").write_bytes(wav())
+        try:
+            await ready(bridge)
+            await bridge.player_input(speech(), speech_end=.5, stt_ms=500)
+            await bridge.session.turn_task
+            await bridge.result(result(audio_path="line.wav"))
+            command = bridge.command("session-a")
+            now[0] += .2
+            await bridge.game_event(event("delivery", 2, delivery_id=command["delivery_id"], status="started"))
+            assert bridge.session.latency_timings["playback_start_receipt"] == pytest.approx(700)
+            assert "subtitle_start_receipt" not in bridge.session.latency_timings
+        finally:
+            await bridge.close()
+    asyncio.run(run())
+
+
+def test_failed_stt_emits_latency_without_a_player_turn(tmp_path, monkeypatch):
+    captured = []
+    monkeypatch.setattr("npc.adapters.skyrim.bridge.log_event", lambda kind, **fields: captured.append((kind, fields)))
+    class Microphone:
+        active = True
+        def stop(self): self.active = False; return wav()
+        def discard(self): self.active = False
+    async def run():
+        bridge = Bridge(settings(tmp_path, stt_url="http://localhost:9999/stt"), root=tmp_path,
+            microphone=Microphone(), client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(503))))
+        try:
+            await ready(bridge)
+            with pytest.raises(httpx.HTTPStatusError):
+                await bridge.finish_listening(bridge.session)
+            assert bridge.session.request_id is None
+            records = [fields for kind, fields in captured if kind == "STT_LATENCY"]
+            assert len(records) == 1
+            assert records[0]["status"] == "failed_or_cancelled" and records[0]["elapsed_ms"] >= 0
+        finally:
+            await bridge.close()
     asyncio.run(run())

@@ -33,6 +33,12 @@ def install_torch(interpreter, command, *, probe=subprocess.run):
              "--extra-index-url", "https://pypi.org/simple"])
 
 
+def install_onnx_gpu(interpreter, command):
+    # Chroma requires CPU-distribution metadata; both wheels share import files.
+    # Reinstall GPU binaries last so pip ordering cannot silently select CPU.
+    command([interpreter, "-c", "import platform,subprocess,sys; subprocess.run([sys.executable,'-m','pip','install','--force-reinstall','--no-deps','onnxruntime-gpu==1.23.2'],check=True) if platform.machine().lower() in ('amd64','x86_64') else None"])
+
+
 def find_game(root):
     config = root / "configs/skyrim/connector.json"
     if config.is_file():
@@ -88,6 +94,7 @@ def setup(root, *, game=None, run=subprocess.run):
             raise ValueError("Chatterbox setup step failed; resolve the displayed error and rerun")
     install_torch(interpreter, command, probe=lambda args, **kwargs: run(args, cwd=root, **kwargs))
     command([interpreter, "-m", "pip", "install", "-r", root / "requirements.txt"])
+    install_onnx_gpu(interpreter, command)
     command([interpreter, "-m", "pip", "install", "-e", ".", "--no-deps", "--no-build-isolation"])
     command([interpreter, "-m", "pip", "check"])
     command([interpreter, "-m", "npc.output.chatterbox", "--prepare"])

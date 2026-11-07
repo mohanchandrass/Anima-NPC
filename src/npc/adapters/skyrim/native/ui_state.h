@@ -21,14 +21,6 @@ inline ChatKeyAction DecideChatKey(bool keyDown, bool hasSession, bool customMen
     if (hasSession) return ChatKeyAction::open_text;
     return canStartDirect ? ChatKeyAction::start_direct : ChatKeyAction::no_npc;
 }
-inline const char* ChatKeyName(ChatKeyAction action) {
-    switch (action) {
-    case ChatKeyAction::open_text: return "open_text_box";
-    case ChatKeyAction::no_npc: return "no_valid_target_or_blocked (hint shown)";
-    case ChatKeyAction::start_direct: return "start_direct";
-    default: return "ignored (key up, custom menu open or listening)";
-    }
-}
 struct UiState {
     Panel panel = Panel::none;
     std::string session;
