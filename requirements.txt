@@ -72,7 +72,10 @@ mpmath==1.3.0
 multidict==7.2.1
 numpy==1.26.4
 oauthlib==4.0.1
+# Chroma declares onnxruntime; the GPU distribution supplies the same import.
+# Setup reinstalls the GPU wheel last so pip file ordering cannot select CPU binaries.
 onnxruntime==1.23.2
+onnxruntime-gpu==1.23.2; platform_machine == "AMD64" or platform_machine == "x86_64"
 opentelemetry-exporter-otlp-common==0.66b2
 opentelemetry-exporter-otlp-proto-common==1.45.2
 opentelemetry-exporter-otlp-proto-grpc==1.45.2

@@ -69,3 +69,10 @@ def test_reasoning_profile_toggle_requires_a_boolean(tmp_path):
     path.write_text('provider: chat_completions\nbase_url: https://example.test/v1\nreasoning_enabled: "false"\n')
     with pytest.raises(ConfigurationFailure):
         load_provider(path, environ={"NPC_LLM_API_KEY": "PRIVATE", "NPC_LLM_MODEL": "test"})
+
+
+def test_strict_schema_is_an_explicit_profile_option(tmp_path):
+    path = tmp_path / "strict.yaml"
+    path.write_text('provider: chat_completions\nbase_url: https://example.test/v1\nresponse_format: json_schema\n')
+    provider = load_provider(path, environ={"NPC_LLM_MODEL": "test", "NPC_LLM_API_KEY": "nonsecret"})
+    assert provider.config.response_format == "json_schema"

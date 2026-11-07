@@ -73,3 +73,12 @@ def test_setup_prepares_local_rag_before_regression_and_preserves_env_on_failure
     assert calls[-1][-3:] == ["-m", "npc.rag", "prepare"]
     assert not any(args[-3:] == ["-m", "pytest", "-q"] for args in calls)
     assert (root / ".env").read_text() == "PRIVATE_EXISTING_KEY"
+
+
+def test_setup_installs_gpu_onnx_binaries_after_requirements(tmp_path):
+    commands = []
+    module.setup(checkout(tmp_path), version=(3, 11), run=lambda args, **kw: commands.append(args) or SimpleNamespace(returncode=0))
+    requirements = next(i for i, args in enumerate(commands) if "-r" in args)
+    gpu = next(i for i, args in enumerate(commands) if any("onnxruntime-gpu==1.23.2" in arg for arg in args))
+    check = next(i for i, args in enumerate(commands) if args[-2:] == ["pip", "check"])
+    assert requirements < gpu < check

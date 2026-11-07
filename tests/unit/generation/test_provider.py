@@ -189,3 +189,29 @@ def test_timeout_applies_per_request_on_the_shared_client():
         assert (await provider.generate(PROMPT, 1)).model == "actual-model"
         await provider.aclose()
     asyncio.run(run())
+def test_provider_reuses_client_and_closes_pool():
+    async def run():
+        provider = ChatCompletionsProvider(config(), transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body())))
+        await provider.generate(PROMPT, 1)
+        client = provider._client
+        await provider.generate(PROMPT, .5)
+        assert provider._client is client and not client.is_closed
+        await provider.aclose()
+        assert client.is_closed and provider._client is None
+    asyncio.run(run())
+
+
+def test_optional_strict_schema_requires_all_response_fields_without_defaults():
+    def handler(request):
+        import jsonschema
+        spec = json.loads(request.content)["response_format"]
+        assert spec["type"] == "json_schema" and spec["json_schema"]["strict"] is True
+        schema = spec["json_schema"]["schema"]
+        assert schema["additionalProperties"] is False
+        assert set(schema["required"]) == {"mode", "text", "cue", "evidence_ids"}
+        assert all("default" not in prop for prop in schema["properties"].values())
+        jsonschema.validate({"mode": "speech", "text": "Hello", "cue": None, "evidence_ids": []}, schema)
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate({"mode": "speech", "text": "Hello", "cue": None, "evidence_ids": [], "state_delta": 100}, schema)
+        return httpx.Response(200, json=body())
+    invoke(handler, response_format="json_schema")

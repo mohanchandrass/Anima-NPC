@@ -5,6 +5,7 @@
   "pipeline_mode": "preview",
   "pipeline_url": null,
   "tts_url": null,
+  "tts_timeout_s": 4,
   "stt_url": null,
   "audio_output": "system",
   "cv_url": null,

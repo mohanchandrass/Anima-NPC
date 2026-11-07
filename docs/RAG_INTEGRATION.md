@@ -5,7 +5,7 @@ RAG is a separate internal component under `src/npc/rag/`. The default configura
 ```text
 NPC-main/
   src/npc/rag/             Retrieval adapters and evidence checks
-    backend/              Document loading, chunking, CPU embeddings and Chroma
+    backend/              Document loading, chunking, GPU-preferred embeddings and Chroma
   Knowledge base/kb/      Local game documents
   data/rag/               Generated local index and embedding cache
   configs/rag/            Trusted world/NPC/source bindings
@@ -15,7 +15,7 @@ The backend reuses the supplied Generalised-RAG-System implementation, without i
 
 ## Setup and launch
 
-`setup.bat` installs the single requirements file, initializes the local CPU embedding model, explicitly synchronizes the knowledge index, and runs offline regression. The first setup can download the embedding model. It preserves `.env`, player state and local media overrides. If using the already-created project environment directly:
+`setup.bat` installs the single requirements file, initializes the local embedding model, explicitly synchronizes the knowledge index, and runs offline regression. The first setup can download the embedding model. It preserves `.env`, player state and local media overrides. If using the already-created project environment directly:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/setup_environment.py --no-update
@@ -62,3 +62,6 @@ For an intentionally external legacy service only, select `backend: http` and `b
 Dialogue knowledge prompts retain previous player questions but omit generated NPC replies as unverified facts; saved history stays intact. Simple follow-up subject resolution changes the retrieval query, not the original input/world facts. Prompt-only short labels map to original packed evidence IDs at validation. A narrow lexical check rejects copied irrelevant authored restrictions and uses the existing repair, without relaxing boundaries or adding canned topic answers.
 
 Raw dialogue retrieval, temporal grounding and model answer quality still have known gaps. Historical descriptions can be mistaken for current events/locations; valid citations alone cannot detect that. This packaging change does not claim to fix those quality issues or exhausted API quota. See the [local integration plan](plans/I05-local-rag-component.md), [attribution review](reviews/2026-11-01-dialogue-attribution.md) and [topic review](reviews/2026-11-01-current-topic.md).
+
+
+GPU-first testing update: setup installs the GPU ONNX runtime last; MiniLM prefers CUDA with CPU fallback. CPU operation emits a model-specific warning. Ingestion/query admission remains bounded and does not change knowledge authorization. See [GPU/latency self-review](reviews/2026-11-06-gpu-latency.md).

@@ -332,6 +332,9 @@ def test_resolver_survives_missing_and_corrupt_plugins_and_caches(tmp_path):
 
 def test_service_passes_sex_through_and_reports_the_tts_engine(tmp_path, monkeypatch):
     rig = Rig(tmp_path, monkeypatch)
+    # This fixture supplies fake Piper/SAPI processes; STT startup is tested separately.
+    async def start_stt(): pass
+    monkeypatch.setattr(rig.engine, "start", start_stt)
     with TestClient(create_speech_app(rig.engine, tts_enabled=True)) as client:
         response = client.post("/tts", json={"request_id": "a", "text": "Hello", "sex": 1,
                                              "voice": {"plugin": "Skyrim.esm", "local_id": "00013AEA"}})

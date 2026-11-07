@@ -1,0 +1,35 @@
+# Remaining latency improvements: implementation self-review
+
+The owner requested completion of the remaining latency work with only necessary changes. This is a labelled plan and implementation self-review under the development/design-review skills; no independent review is claimed. Existing uncommitted GPU/Whisper/CV/client changes were preserved.
+
+## Reviewed plan and scope
+
+Add stage accounting to the existing preview trace and connector logs; retain one bounded timing record per session's latest turn. Use a monotonic clock for durations and retain existing wall-clock protocol expiry separately. Begin speech timing at microphone release/finalization, before STT; separately report server response readiness, output staging, and native start receipt. CV wait is zero after the previous nonblocking change; trusted-context publication wait remains measurable. Record initial model work and repair separately, including failure/timeout time. Keep staging and delivery semantics unchanged.
+
+Bound optional synthesis with a configurable 4-second budget, clamped to the remaining turn deadline with the existing 0.5-second delivery reserve. Cancel slow requests and deliver the validated subtitle instead. Do not change voices/backends, synthesize rejected content, extend expiry or retry inference. GPU preference/persistent TTS from the earlier change remain in use. Skip new synthesis entirely when only the reserve remains.
+
+For generation, preserve authored fast routes, short policy limits and the two-call ceiling. Add explicit strict JSON-schema output support to the existing provider configuration for compatible endpoints, using the response contract, all fields required and no extra properties. Keep JSON-object mode as the compatibility default; strict mode is optional because endpoint capability is not known universally. Keep local validation, citation checks, grounding restrictions and bounded repair even in strict mode. No speculative token-cap reduction, extra critic/classifier call or backend switch is justified without measured quality evidence.
+
+Test exact stage accounting with controlled clocks, failed provider timing, schema validation and profile loading, TTS timeout/cancellation/subtitle fallback, STT failure accounting and audio/subtitle delivery distinctions. Run full offline regression and documentation/compile checks. No new dependencies, native code, database migration or telemetry service are needed.
+
+## Implementation review and corrections
+
+- Review fixes ensure prompt-budget failures retain construction time before fallback, invalid STT is not logged as ready, and cancellation retains elapsed timing. A targeted prompt-budget regression verifies no provider call is made.
+- `TurnPreview.stage_ms` reports context/policy, retrieval, prompt construction, generation, repair and validation durations; values are nonnegative and finite with bounded map size. Defaults keep existing preview fixtures compatible. Unused stages are zero. Provider failures/timeouts are timed through finally cleanup, rather than disappearing from successful-only metrics.
+- The connector uses its own monotonic timer. Speech-end is the bridge's processing of F8 release (or recording cap), including microphone finalization and STT; it is not an acoustic end-of-speech detector. A text input has a separate origin label. Failed/cancelled STT emits STT_LATENCY without fabricating a player turn. Failed turns emit TURN_LATENCY too.
+- PIPELINE_RESULT records call count, repair-attempt flag, tokens, result route/status and core stage durations. TURN_LATENCY records the latest request's stage_ms, origin and TTS outcome at staging and native started receipt. Per-session storage does not accumulate turn metrics; existing rotating logs bound retention.
+- response_staged, validated_response_ready and playback_start_receipt/subtitle_start_receipt are cumulative milliseconds from the labelled origin, not additive stage durations. delivery_wait measures staging to native-start receipt. Start metrics are not produced for stale/retired commands or relabelled as acoustic hearing. Native receipt time includes transport/poll delay; no cross-process monotonic clock subtraction occurs. Missing start receipts remain missing, not successful delivery. Background CV compute is excluded from the critical-path sum; cv_wait is explicitly zero.
+- TTS budget is `tts_timeout_s` (default 4, configurable 0.1–20 seconds). Partial/invalid/slow audio is discarded; timeout propagates cancellation to the existing local speech disconnect handler, which kills/reaps its worker and performs bounded recovery. External services may continue server-side work after cancellation. A synthesis timeout is explicitly labelled subtitle_fallback, not successful audio acceleration.
+- Strict output uses `response_format: json_schema` or `NPC_LLM_RESPONSE_FORMAT=json_schema`. The schema comes from ResponseBody with optional-default keywords removed and all fields required for strict endpoint compatibility. Unsupported endpoints produce the existing typed failure/fallback without an automatic compatibility retry. The existing json_object and none transports are preserved.
+
+## Measurement and remaining empirical limits
+
+Start the connector with `run_skyrim_connector.bat --log-file output/skyrim/latency.log`. Compare matched warm authored/generated turns with the same game, microphone, provider, voice and NPC. Include repair/fallback/failed STT counts; separate audio vs subtitle start, speech vs text input, and cold startup vs steady state. Use at least 30 comparable warm turns for route-level p50/p90/p95/max assessment; larger samples are preferable for tails. Do not treat fallback speed as model/audio success. No paid generation benchmark or target Windows/GPU/game measurement was run by this change.
+
+Implemented outcomes are instrumentation, bounded speech latency and strict-format capability. They do not establish lower model latency, a measured repair-rate reduction, GPU TTS throughput, semantic quality or the original 6-second p90 voice target. Those require actual target-machine observations. The earlier 19.67-second CPU sample remains historical, not a new benchmark. No unmeasured speedup is claimed.
+
+Primary source checked: [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs) documents endpoint-dependent JSON-schema support and the need to retain compatibility/validation checks.
+
+Final validation results are appended after regression below.
+
+Final verification: `.venv/bin/python -m pytest -q` — **629 passed in 20.67 seconds**, with the existing deprecation and intentional device-placement warnings. Runtime compilation, whitespace checks and updated documentation links passed. The public connector example validates with the new default synthesis budget. The controlled-clock repair test records 50 ms generation plus 30 ms repair; the stalled-TTS test confirms request cancellation and subtitle staging within its 0.1-second test budget (with test scheduling tolerance). These are fixture measurements, not real-model performance claims.

@@ -212,3 +212,20 @@ def test_timeout_recovery_warms_outside_new_request_deadlines(tmp_path):
         finally: await worker.close()
         assert all(process.returncode==-1 for process in processes)
     asyncio.run(run())
+
+
+def test_gpu_load_failure_falls_back_once_with_warning(tmp_path, monkeypatch):
+    loads = []
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(set_num_threads=lambda n: None,
+        set_grad_enabled=lambda enabled: None, cuda=SimpleNamespace(is_available=lambda: True, empty_cache=lambda: None)))
+    monkeypatch.setitem(sys.modules, "perth", SimpleNamespace(PerthImplicitWatermarker=object))
+    class Model:
+        @classmethod
+        def from_local(cls, path, device):
+            loads.append(device)
+            if device == "cuda": raise RuntimeError("GPU out of memory")
+            return "cpu-model"
+    monkeypatch.setitem(sys.modules, "chatterbox.tts_turbo", SimpleNamespace(ChatterboxTurboTTS=Model))
+    with pytest.warns(RuntimeWarning, match="Chatterbox Turbo model is running on CPU"):
+        assert turbo.load_model(tmp_path) == "cpu-model"
+    assert loads == ["cuda", "cpu"]

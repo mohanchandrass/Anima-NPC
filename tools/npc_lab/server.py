@@ -76,6 +76,9 @@ class LabServer(ThreadingHTTPServer):
         super().server_close()
         if self.loop.is_running():
             async def stop_tasks():
+                provider = self.service.runner.provider
+                if hasattr(provider, "aclose"):
+                    await provider.aclose()
                 tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
                 for task in tasks:
                     task.cancel()

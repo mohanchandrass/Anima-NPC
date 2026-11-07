@@ -79,7 +79,8 @@ def test_turn_does_not_wait_for_or_need_a_screenshot_when_cv_is_off(tmp_path):
         try:
             await bridge.game_event(event())
             await asyncio.to_thread(started.wait, 5)  # the session-open capture is in flight and stuck
-            assert not bridge.session.context_task.done()
+            assert bridge.session.context_task.done()
+            assert not bridge.session.visual_task.done()
             await bridge.player_input(say())
             await asyncio.wait_for(bridge.session.turn_task, 3)  # would hang here if the turn waited for it
             assert bridge.session.delivery["text"]
@@ -91,7 +92,7 @@ def test_turn_does_not_wait_for_or_need_a_screenshot_when_cv_is_off(tmp_path):
     asyncio.run(run())
 
 
-def test_turn_still_waits_for_context_when_cv_is_connected(tmp_path):
+def test_turn_publishes_context_but_does_not_wait_for_cv_when_connected(tmp_path):
     release = threading.Event()
 
     class Vision:
@@ -109,7 +110,9 @@ def test_turn_still_waits_for_context_when_cv_is_connected(tmp_path):
             await bridge.game_event(event())
             await bridge.player_input(say())
             await asyncio.sleep(.2)
-            assert not bridge.session.turn_task.done()  # CV on: still waiting for the capture
+            assert bridge.session.context_task.done()
+            assert bridge.session.turn_task.done()  # optional CV never blocks the turn
+            assert not bridge.session.visual_task.done()
             release.set()
             await asyncio.wait_for(bridge.session.turn_task, 3)
             assert bridge.session.delivery["text"]

@@ -254,10 +254,12 @@ def test_bridge_logs_game_context_screenshot_cv_and_player_input(logs, capsys, t
         try:
             await bridge.game_event(event())
             await bridge.session.context_task
+            if bridge.session.visual_task:
+                await bridge.session.visual_task
             await bridge.player_input(make_speech(source="stt", confidence=0.87).model_copy(update={"text": "Who are you, stranger, and what do you do here?"}), stt_ms=412)
             await bridge.session.turn_task
             vision.fail = True
-            await bridge.publish_context(bridge.session, "context_updated")
+            await bridge.refresh_visual(bridge.session)
         finally:
             await bridge.close()
     asyncio.run(run())
