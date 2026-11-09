@@ -184,3 +184,28 @@ def test_repeated_early_body_rejections_return_http_errors_not_socket_resets(lab
     for _ in range(12):
         response = client.post("/api/turn", json=payload(server), headers=headers(server) | {"X-Lab-Token":"wrong"})
         assert response.status_code == 403
+
+
+def test_source_only_offline_lab_starts_without_private_media_or_model_services(tmp_path):
+    from tools.npc_lab.media import LabMedia, MediaSettings
+    from npc.state.social_store import SocialStore
+    # Empty private media root: no LFS payload, game, provider key or model cache.
+    media = LabMedia(tmp_path, settings=MediaSettings(piper_directory="assets/private/npc_lab/piper", voices={}, models={}))
+    server = LabServer(LabService(OfflineProvider(), media=media,
+        state_store=SocialStore(tmp_path / "state.sqlite3")), port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with httpx.Client(base_url=server.origin, trust_env=False, timeout=5) as client:
+            page = client.get("/")
+            assert page.status_code == 200 and "text/html" in page.headers["Content-Type"]
+            info = client.get("/api/info").json()
+            assert info["mode"] == "offline fake" and info["persistent_state"] is True
+            assert info["cv_enabled"] is False and info["skyrim_fonts_available"] is False
+            assert len(info["profiles"]) == 4
+            assert all(not p["media"]["voice_available"] and p["media"]["model_url"] is None for p in info["profiles"])
+            assert client.get("/scenes/mira.svg").status_code == 200
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()

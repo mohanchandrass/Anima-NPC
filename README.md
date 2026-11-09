@@ -42,7 +42,7 @@ flowchart LR
 5. Scoped retrieval returns only passages this NPC is bound to read.
 6. The prompt builder packs persona, facts, passages and memory for the model.
 7. The validator checks strict JSON, evidence IDs, length and repeats. It allows one repair, then an authored fallback.
-8. The connector shows the reply and sends receipts. Only completed replies enter memory.
+8. The connector shows the reply and sends receipts. Only completed replies enter memory. A completed receipt can describe subtitle display even when audio failed; browser acknowledgements mean displayed, not heard.
 
 ## Main components
 
@@ -52,7 +52,7 @@ flowchart LR
 | Context builder | Selects perceived, fresh facts and builds the situation | `src/npc/context/` |
 | Behaviour policy | Rules for engagement, tone, length and moves | `src/npc/behavior/` |
 | Conversation reading | Classifies the turn against earlier turns | `src/npc/context/conversation.py` |
-| Retrieval (RAG) | Local ingestion, CPU embeddings, scoped search | `src/npc/rag/` |
+| Retrieval (RAG) | Local ingestion, GPU-preferred embeddings, scoped search | `src/npc/rag/` |
 | Prompt and provider | Prompt builder and chat-completions client | `src/npc/generation/` |
 | Validator | Accepts or rejects model output | `src/npc/validation/` |
 | Social store | SQLite relationship and conversation state | `src/npc/state/` |
@@ -69,8 +69,8 @@ Supports Skyrim SE 1.6.318 and 1.7.104. Mantella isn't needed.
 1. Install [SKSE](https://skse.silverlock.org/) for your game version.
 2. In your mod manager, install **Address Library for SKSE Plugins**, **UIExtensions** (for the text box) and **SkyUI**.
 3. Clone this repository with Git LFS, and run `setup.bat`.
-4. Copy `.env.example` to `.env`, and add your `GEMINI_API_KEY` and `NPC_LLM_MODEL`.
-5. Copy `configs/skyrim/connector.example.json` to `configs/skyrim/connector.json`, then set `game_directory` to your Skyrim folder.
+4. Setup creates `.env` only if absent. Configure the matching provider key and `NPC_LLM_MODEL` there; preserve existing credentials.
+5. If `configs/skyrim/connector.json` is absent, copy the public example once; otherwise edit the existing file. Set `game_directory` to your Skyrim folder.
 6. Build the mod (needs Visual Studio 2022 with C++ tools):
    ```powershell
    .\.venv\Scripts\python.exe scripts/build_skyrim_connector.py --fetch
@@ -81,9 +81,9 @@ Supports Skyrim SE 1.6.318 and 1.7.104. Mantella isn't needed.
    ```
 8. Enable `Anima.esp` in your mod manager's plugin list.
 9. Start Skyrim through SKSE. The Anima console window opens by itself.
-10. Talk to any NPC, choose **Talk with me**, then press **F6** to type or hold **F8** to speak.
+10. Start a conversation, then press **H** to type, hold **F8** to speak, or press **F7** for options. These are the current INI defaults; configured overrides take precedence. The **Talk with me** line needs `Anima.esp` and UIExtensions.
 
-To remove it, disable `Anima.esp` and delete `AnimaConnector.dll` and `AnimaConnector.ini` from `Data/SKSE/Plugins`.
+To undo an installer-managed update, close Skyrim and use the recorded [rollback instructions](docs/SKYRIM_CONNECTOR.md). If installed as its own mod-manager mod, disable/remove that complete mod; preserve unrelated game files and saved state.
 
 ## What goes in and what comes out
 
@@ -300,10 +300,10 @@ The connector shows the subtitle and plays the voice. The game then returns a re
 
 | Purpose | Current choice | Notes |
 |---|---|---|
-| Language model | `gemini-3.5-flash-lite`, through Gemini's OpenAI-compatible endpoint | Replaceable. An OpenRouter profile is included, and any compatible or local endpoint works |
-| Knowledge search | `all-MiniLM-L6-v2` (384 dimensions, ONNX, CPU) with Chroma | Only when a knowledge binding is configured |
-| Speech to text | `faster-whisper` `base.en` (CPU, INT8) | Hold F8 to talk. Prepared automatically |
-| Text to speech | Piper, with a Skyrim voice model per voice type (16 kHz) | Plays through Windows audio. Falls back to the Windows voice. Chatterbox Turbo is optional and not set up here |
+| Language model | Configured by provider profile and local `NPC_LLM_MODEL` | Configured per provider profile and local `.env`; OpenRouter and Gemini transports are implemented. Other compatible/local endpoints require their own verification |
+| Knowledge search | `all-MiniLM-L6-v2` (384 dimensions, ONNX, GPU preferred with CPU fallback) with Chroma | Only when a knowledge binding is configured |
+| Speech to text | `faster-whisper` `small.en` (resident; CUDA preferred, CPU INT8 fallback) | Hold F8 to talk. Prepared automatically; CPU fallback warns |
+| Text to speech | Piper, with a Skyrim voice model per voice type (16 kHz) | Plays through Windows audio. Falls back to the Windows voice. Chatterbox Turbo is optional after its setup; Piper/SAPI use their local CPU runtime |
 | Vision (optional) | `qwen2.5vl:3b` through Ollama, optional YOLO (`yolo26n`) | Off by default |
 | Lip movement | Audio-volume mouth envelope | `.lip` files through FaceFX only in the optional `say` mode |
 
@@ -439,14 +439,18 @@ Offline check:
 | Works | Different NPCs give different, role-appropriate answers in the lab and in a small live sample |
 | Works | Browser lab with four personas |
 | Partly | Conversation director (repeat, follow-up and push-back handling): implemented and tested offline, not yet judged on real conversations |
-| Works | Skyrim text input with F6. Speech input with F8 is built, not yet tried live |
-| Partly | Voice plays through the PC's system audio, not the game's sound engine, and is not positional |
-| Works | In-game replies complete with voice and subtitle, and NPCs remember earlier turns |
+| Works | Skyrim text input defaults to H; F8 speech input is implemented. Candidate-specific Windows/game checks remain required |
+| Partly | System audio is the default; engine and Say routes are optional and require their own live verification |
+| Partly | Game receipts and scoped memory are implemented. Completed output is not proof of audible speech or human hearing |
 | Not yet | Human believability has not been measured |
 | Not yet | A second game. One connector exists |
 | Partly | Default personas, common knowledge, opening lines, mouth movement, console window and the "Talk with me" line are built and tested offline, and need a first live run |
 
 Details and next steps are in the [goal gap review](docs/reviews/2026-11-05-goal-gap-review.md).
+
+## Release baseline
+
+Current source-only checks and the supported-runtime evidence are tracked in [release baseline](docs/RELEASE_BASELINE.md). The [production-readiness plan](docs/plans/PRODUCTION_READINESS.md) separates passing offline checks from Windows native and live game qualification. CI runs without LFS media, model preparation or provider credentials.
 
 ## Docs and contributing
 

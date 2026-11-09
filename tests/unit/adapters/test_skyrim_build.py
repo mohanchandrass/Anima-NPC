@@ -58,3 +58,20 @@ def test_missing_dependency_does_not_download_without_fetch(tmp_path,monkeypatch
     monkeypatch.setattr(b,'ROOT',tmp_path)
     with pytest.raises(ValueError,match='--fetch'):b.dependencies(False)
     assert not (tmp_path/'.tools/missing').exists()
+
+
+def test_native_only_runs_real_build_targets_and_ctest_without_papyrus_or_packaging(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(b.sys, 'argv', ['build', '--native-only', '--build-dir', str(tmp_path / 'native')])
+    monkeypatch.setattr(b, 'dependencies', lambda fetch: {})
+    monkeypatch.setattr(b, 'find_cmake', lambda: Path('cmake.exe'))
+    commands = []
+    monkeypatch.setattr(b, 'command', lambda args, **kw: commands.append([str(v) for v in args]))
+    def forbidden(*a, **kw): raise AssertionError('native-only must not compile Papyrus or create a release package')
+    monkeypatch.setattr(b, 'compile_papyrus', forbidden)
+    monkeypatch.setattr(b, 'package', forbidden)
+    b.main()
+    build = next(args for args in commands if '--build' in args)
+    assert {'AnimaConnector', 'AnimaConsole', 'AnimaDeliveryTests', 'AnimaRuntimeTests'} <= set(build)
+    ctest = next(args for args in commands if '--test-dir' in args)
+    assert '--no-tests=error' in ctest and '--output-junit' in ctest
+    assert 'Papyrus and release packaging were not run' in capsys.readouterr().out

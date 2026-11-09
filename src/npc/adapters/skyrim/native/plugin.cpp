@@ -1146,7 +1146,7 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
     }
     SKSE::Init(skse);
     SKSE::GetPapyrusInterface()->Register(RegisterPapyrus);
-    SKSE::log::info("AnimaConnector 0.5.6 loading on Skyrim {}; Address Library format {}", version.string(),
+    SKSE::log::info("AnimaConnector 0.5.7 loading on Skyrim {}; Address Library format {}", version.string(),
                    anima::AddressLibraryFormat({version.major(),version.minor(),version.patch(),version.build()}));
     return SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) Connector::Get().Initialize();

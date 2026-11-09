@@ -1,12 +1,12 @@
 # Anima production-readiness plan
 
-Date: 2026-11-09. Status: **reviewed plan, not implementation or release approval**.
+Date: 2026-11-09. Status: **reviewed plan, not release approval**. Phase-0 execution is tracked in the [release baseline](../RELEASE_BASELINE.md) and [execution review](../reviews/2026-11-09-phase0-baseline.md); Windows/remote CI gates remain separate from local implementation.
 
 ## Scope and baseline
 
 Target a reliable **local Windows, single-player Skyrim release** plus the existing browser companion for testing. Keep the modular Python application, native SKSE connector, replaceable API provider and optional local models. Support only declared, actually tested game/runtime and device combinations. Hosting, accounts, multi-user service operation and universal mod compatibility are separate work.
 
-Baseline: main 28df175 plus the current uncommitted fixes on feature/known-issue-fixes. The [known-issue review](../reviews/2026-11-09-known-issues.md) records **994 passed, 6 skipped**; that is the last executed offline run, not live Windows/GPU signoff. The fixes still need normal review/commit/integration before serving as a release baseline. Preserve other working-tree changes. This plan changes no runtime code and authorizes no publication, game installation, recording or paid benchmark run by itself.
+Planning baseline: main 28df175 plus the then-uncommitted fixes on feature/known-issue-fixes. Those reviewed fixes and this plan were committed as 31aee43 during phase 0. The [known-issue review](../reviews/2026-11-09-known-issues.md) records **994 passed, 6 skipped** for that earlier slice; newer phase-0 evidence belongs in the execution review, not in historical research results. Local integration is distinct from the pending Windows/remote CI gates. Preserve other working-tree changes. This plan changes no runtime code and authorizes no publication, game installation, recording or paid benchmark run by itself.
 
 Use [contracts](../CONTRACTS.md), [team workflow](../TEAM_WORKFLOW.md), [placement](../REPOSITORY_STRUCTURE.md), [evaluation](../EVALUATION.md), [resources](../RESOURCE_PROFILE.md), [Skyrim connector](../SKYRIM_CONNECTOR.md) and [social state](../SOCIAL_STATE.md) as references. Where older documents differ from current code, reconcile the claim rather than implement the old text automatically.
 

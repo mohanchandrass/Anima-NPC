@@ -121,6 +121,7 @@ def configure_arguments(cmake: Path, build: Path, generator: str):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--native-only", action="store_true", help="Build DLL/console and run CTest without Papyrus, packaging or game files")
     parser.add_argument("--fetch", action="store_true", help="download missing pinned build dependencies")
     parser.add_argument("--generator", default="Visual Studio 17 2022")
     parser.add_argument("--build-dir", type=Path, default=ROOT / "output/skyrim-build", help="Separate build trees for different native toolchains")
@@ -132,7 +133,11 @@ def main():
         configure = configure_arguments(cmake, build, args.generator)
         command(configure)
         command([cmake, "--build", build, "--config", "Release", "--target", "AnimaConnector", "AnimaConsole", "AnimaDeliveryTests", "AnimaRuntimeTests", "--parallel", "2"])
-        command([cmake.parent / "ctest.exe", "--test-dir", build, "-C", "Release", "--output-on-failure"])
+        command([cmake.parent / "ctest.exe", "--test-dir", build, "-C", "Release", "--output-on-failure",
+                 "--no-tests=error", "--output-junit", build / "native-tests.xml"])
+        if args.native_only:
+            print(f"Native build and tests completed: {build}. Papyrus and release packaging were not run.")
+            return
         dll = build / "Release/AnimaConnector.dll" if args.generator.startswith("Visual Studio") else build / "AnimaConnector.dll"
         console = build / "Release/AnimaConsole.exe" if args.generator.startswith("Visual Studio") else build / "AnimaConsole.exe"
         scripts = compile_papyrus(ROOT / "output/skyrim-mod/papyrus")

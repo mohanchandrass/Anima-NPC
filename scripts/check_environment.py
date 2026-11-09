@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INPUTS = ("requirements.txt", "pyproject.toml", "assets/runtime/manifest.json",
           "scripts/setup_environment.py", "scripts/anima_assets.py",
-          "scripts/check_environment.py")
+          "scripts/check_environment.py", "scripts/setup_chatterbox.py")
 
 
 def fingerprint(root):
@@ -37,16 +37,20 @@ def readiness(root, *, version=None, installed=importlib.metadata.version, find=
         marker = json.loads((root / ".venv/.anima-ready.json").read_text(encoding="utf-8"))
         if marker.get("fingerprint") != fingerprint(root):
             return "setup inputs changed"
+        from packaging.requirements import Requirement
         for line in (root / "requirements.txt").read_text().splitlines():
             line = line.split("#", 1)[0].strip()
             if not line:
                 continue
-            name, expected = line.split("==", 1)
+            requirement = Requirement(line)
+            if requirement.marker is not None and not requirement.marker.evaluate():
+                continue
+            name = requirement.name
             actual = installed(name)
             # CPU/CUDA wheel tags are hardware builds of the same pinned Torch release.
             if name.lower() in {"torch", "torchaudio"}:
                 actual = actual.split("+", 1)[0]
-            if actual != expected:
+            if not requirement.specifier.contains(actual, prereleases=True):
                 return "missing or outdated dependency"
         project = find("npc")
         if project is None or not project.origin or not Path(project.origin).resolve().is_relative_to((root / "src/npc").resolve()):

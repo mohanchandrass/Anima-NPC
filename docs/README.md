@@ -13,6 +13,7 @@ Start with the [general TRD](TRD.md), then the [shared contracts](CONTRACTS.md) 
 | How teammates implement and review | [Team workflow](TEAM_WORKFLOW.md), [development skill](../.agents/skills/develop-npc-component/SKILL.md) |
 | Next work packages and dependencies | [Issue-ready backlog](BACKLOG.md) |
 | Production polish, release sequence and acceptance gates | [Production-readiness plan](plans/PRODUCTION_READINESS.md) |
+| Current baseline, CI checks and skip inventory | [Release baseline](RELEASE_BASELINE.md) |
 | Architecture tradeoffs | [Decisions](DECISIONS.md), [source reconciliation](TRACEABILITY.md) |
 | Latency, quality and compute budgets | [Evaluation](EVALUATION.md), [resource profile](RESOURCE_PROFILE.md) |
 | Design review conclusions | [Reviewed baseline](reviews/2026-10-31-design-review.md), [reviewer skill](../.agents/skills/review-npc-design/SKILL.md) |

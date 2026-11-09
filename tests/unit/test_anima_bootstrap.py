@@ -153,3 +153,33 @@ def test_provider_auto_fallback_is_labelled_and_explicit_live_errors(monkeypatch
     sentinel = object()
     monkeypatch.setattr(app, "load_provider", lambda _: sentinel)
     assert app.choose_provider("auto", Path("profile.yaml")) == (sentinel, True)
+
+
+def test_readiness_parses_active_requirement_markers_and_torch_build_tags(tmp_path):
+    root = prepared(tmp_path)
+    (root / "requirements.txt").write_text('example==1.0; python_version >= "3.11"\ntorch==2.6.0\n')
+    record_ready(root)
+    assert readiness(root, version=(3, 11), installed=lambda name: "2.6.0+cpu" if name == "torch" else "1.0",
+        find=lambda name: SimpleNamespace(origin=str(root / "src/npc/__init__.py"))) is None
+
+
+def test_readiness_does_not_require_packages_excluded_by_markers(tmp_path):
+    root = prepared(tmp_path)
+    (root / "requirements.txt").write_text('not-installed==1.0; python_version < "0"\nexample==1.0\n')
+    record_ready(root)
+    def installed(name):
+        assert name == "example", "excluded requirements must never be queried"
+        return "1.0"
+    assert readiness(root, version=(3, 11), installed=installed,
+        find=lambda name: SimpleNamespace(origin=str(root / "src/npc/__init__.py"))) is None
+
+
+def test_readiness_invalidates_when_runtime_selection_setup_changes(tmp_path):
+    root = prepared(tmp_path)
+    helper = root / "scripts/setup_chatterbox.py"
+    helper.parent.mkdir()
+    helper.write_text("# first runtime selection\n")
+    record_ready(root)
+    assert ready(root) is None
+    helper.write_text("# updated runtime selection\n")
+    assert ready(root) == "setup inputs changed"

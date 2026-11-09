@@ -5,8 +5,8 @@
 Install **Python 3.11** (with the Python launcher), Git and **Git LFS**. Sign in with an account that has access to this private repository. Clone the repository, then double-click **[run_anima.bat](run_anima.bat)**. It checks the installation and runs setup automatically when needed. No administrator privileges, GPU, Node, Skyrim or API key are needed for basic setup.
 
 ```powershell
-git clone https://github.com/mohanchandrass/NPC.git
-cd NPC
+git clone https://github.com/mohanchandrass/Anima-NPC.git
+cd Anima-NPC
 .\run_anima.bat --offline
 ```
 
@@ -77,7 +77,7 @@ Copy `.env.example` only if `.env` does not already exist. Activation is optiona
 
 Use the [development workflow](.agents/skills/develop-npc-component/SKILL.md), [repository structure](docs/REPOSITORY_STRUCTURE.md), [context preview](docs/CONTEXT_BUILDER.md) and [generation guide](docs/GENERATION_VALIDATION.md). Optional UI tests require Node 22+ and Chrome; they are separate from basic setup and documented in [Anima](docs/ANIMA.md).
 
-Current implementation is a core context/policy/generation/structural-validation slice with initial social persistence and a separate local companion. RAG, production game delivery and hosting are future work. `.venv`, `.tools`, `.toolds`, `.env`, generated state/logs and private assets are ignored. The user-controlled KB folder is not automatically ignored; check privacy before tracking its contents.
+Current implementation includes context/policy/generation/validation, local scoped RAG, social persistence, the browser companion and a best-effort Skyrim connector. Full production delivery/restart guarantees and hosting remain separate work. `.venv`, `.tools`, `.toolds`, `.env`, generated state/logs and private assets are ignored. Local KB contents are ignored except the public README/placeholder; review privacy before deliberately tracking any corpus.
 
 Runtime installation is idempotent. Previously package-managed files update automatically; separately modified local media is preserved. Neither `.env` nor saved player data is part of the archive. Keep the repository private; upstream asset rights/licences are retained. See [bundle provenance](assets/runtime/README.md) and [immersion review](docs/reviews/2026-10-31-immersion-refinement.md).
 
@@ -85,9 +85,13 @@ To ensure an existing teammate install uses exactly the shared runtime media, ru
 
 Normal launches perform local readiness checks only: pinned package versions, project import, configuration presence, setup fingerprint and installed media presence/size. Missing/outdated installations trigger setup once, including regression. Healthy launches do not run pip, tests or a Git pull. To request source updates explicitly, run setup. Full media hashes are verified during setup rather than on every launch. Same-size local edits are not detected by the fast launch check; use `setup.bat --sync-media` to verify/restore the shared media. Python 3.11, Git, Git LFS and private-repository authentication remain machine prerequisites; the scripts do not install global software.
 
+## Source-only checks and automation
+
+The [release baseline](docs/RELEASE_BASELINE.md) documents CI and fresh contributor checks. CI intentionally bypasses `setup.bat`: normal application setup prepares model assets and media, whereas default regression must require neither. Installing Python/build packages needs network access; executing the offline tests does not require an API key, GPU, game installation or model weights. Running an installed scripted preview is distinct from first-time setup without internet.
+
 ## Included local RAG component
 
-Setup now also installs the pinned Chroma/ONNX CPU dependencies into the same `.venv`, prepares the local encoder (first setup may download it), and synchronizes `Knowledge base/kb/` into ignored `data/rag/`. No separate RAG environment/server is needed. Add your own documents, then use `python -m npc.rag sync` with the project interpreter outside interactive use. See [RAG integration](docs/RAG_INTEGRATION.md) for the single-process launch and trusted source bindings. Local preparation does not call the dialogue-model API or consume its request quota. Raw corpus, index and model cache remain ignored; existing external installations and player state are preserved.
+Setup now also installs the pinned Chroma/ONNX dependencies with GPU preference and CPU fallback into the same `.venv`, prepares the local encoder (first setup may download it), and synchronizes `Knowledge base/kb/` into ignored `data/rag/`. No separate RAG environment/server is needed. Add your own documents, then use `python -m npc.rag sync` with the project interpreter outside interactive use. See [RAG integration](docs/RAG_INTEGRATION.md) for the single-process launch and trusted source bindings. Local preparation does not call the dialogue-model API or consume its request quota. Raw corpus, index and model cache remain ignored; existing external installations and player state are preserved.
 
 ## Skyrim speech input
 

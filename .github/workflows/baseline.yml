@@ -1,0 +1,115 @@
+name: Release baseline
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python 3.11 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python: .venv/bin/python
+          - os: windows-2022
+            python: .venv/Scripts/python.exe
+    defaults:
+      run:
+        shell: bash
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      ANONYMIZED_TELEMETRY: 'False'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          lfs: false
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Create project environment
+        run: python -m venv .venv
+      - name: Select the supported Torch wheel without preparing models
+        run: |
+          "${{ matrix.python }}" - <<'PY'
+          import subprocess
+          import sys
+          from scripts.setup_chatterbox import install_torch
+          install_torch(sys.executable, lambda args: subprocess.run([str(arg) for arg in args], check=True))
+          PY
+      - name: Install the single requirements file and checkout
+        run: |
+          "${{ matrix.python }}" -m pip install -r requirements.txt
+          "${{ matrix.python }}" - <<'PY'
+          import subprocess
+          import sys
+          from scripts.setup_chatterbox import install_onnx_gpu
+          install_onnx_gpu(sys.executable, lambda args: subprocess.run([str(arg) for arg in args], check=True))
+          PY
+          "${{ matrix.python }}" -m pip install -e . --no-deps --no-build-isolation
+          "${{ matrix.python }}" -m pip check
+      - name: Offline regression, contracts and integration
+        run: |
+          mkdir -p output/ci
+          git rev-parse HEAD > output/ci/revision.txt
+          "${{ matrix.python }}" -m pytest -q --junitxml=output/ci/python.xml
+      - name: Offline CLI smoke
+        run: '"${{ matrix.python }}" -m npc.runtime fixtures/scenarios/smith_available.json'
+      - name: Preserve test results only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-${{ matrix.os }}
+          path: |
+            output/ci/python.xml
+            output/ci/revision.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+  native:
+    name: Native Windows build and CTest
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          lfs: false
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Create project environment
+        run: python -m venv .venv
+      - name: Build pinned native sources and execute tests
+        run: |
+          New-Item -ItemType Directory -Force output/ci | Out-Null
+          git rev-parse HEAD | Set-Content output/ci/revision.txt
+          .venv/Scripts/python.exe scripts/build_skyrim_connector.py --fetch --native-only
+      - name: Preserve native test results only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-windows
+          path: |
+            output/skyrim-build/native-tests.xml
+            output/ci/revision.txt
+          if-no-files-found: warn
+          retention-days: 7
