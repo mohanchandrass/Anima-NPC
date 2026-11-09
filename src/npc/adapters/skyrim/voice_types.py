@@ -75,6 +75,10 @@ class VoiceTypeResolver:
         if key not in self._cache:
             path = self.data / plugin
             try:
+                if not path.is_file():
+                    # Skyrim plugin identities are case-insensitive on every host.
+                    matches = [entry for entry in self.data.iterdir() if entry.name.lower() == key and entry.is_file()]
+                    path = matches[0] if len(matches) == 1 else path
                 self._cache[key] = parse_voice_types(path) if path.is_file() else {}
             except (OSError, ValueError, zlib.error, UnicodeError, struct.error):
                 self._cache[key] = {}

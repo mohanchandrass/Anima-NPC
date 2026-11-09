@@ -554,13 +554,14 @@ class Bridge:
                         log_event("CV_REQUEST", url=self.settings.cv_url, bytes=len(image), timeout_s=self.settings.cv_timeout_s)
                         async with asyncio.timeout(self.settings.cv_timeout_s):
                             visual = await self.cv_client.analyze(image, "image/png")
+                        fresh = (self.session is session and session.revision == revision
+                                 and 0 <= self.clock() - captured_time < self.settings.visual_ttl_s)
                         log_event("CV_RESULT", environment=(visual.environment or "none")[:120], characters=len(visual.characters),
                                   objects=len(visual.objects), uncertainties=len(visual.uncertainties),
                                   model=visual.vlm_model or visual.detector_model or "unknown",
                                   latency_ms=round((time.monotonic() - cv_began) * 1000),
-                                  status="fresh" if self.session is session and session.revision == revision else "stale_discarded")
-                        if (self.session is session and session.revision == revision
-                                and 0 <= self.clock() - captured_time < self.settings.visual_ttl_s):
+                                  status="fresh" if fresh else "stale_discarded")
+                        if fresh:
                             session.visual = visual.model_copy(update={
                                 "captured_at": datetime.fromisoformat(session.screenshot["captured_at"])})
                             session.visual_revision = revision

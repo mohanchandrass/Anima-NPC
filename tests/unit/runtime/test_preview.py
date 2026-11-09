@@ -320,13 +320,13 @@ def test_stage_timings_cover_prompt_model_and_validation(scenario_data):
     assert all(value >= 0 for value in result.stage_ms.values())
 
 
-def test_a_reply_that_is_only_too_long_is_shortened_without_another_call(scenario_data):
+def test_a_reply_that_is_only_too_long_uses_bounded_repair(scenario_data):
     long = json.dumps({"mode": "speech", "text": "I keep watch here. Nobody thanks me for it. The nights are long.", "cue": None, "evidence_ids": []})
-    provider = ScriptedProvider(long)
+    provider = ScriptedProvider(long, VALID)
     result = asyncio.run(PreviewRunner(provider).run(generating(scenario_data)))
-    assert result.status == "repair_success" and result.model_calls == 1
+    assert result.status == "repair_success" and result.model_calls == 2
     assert result.plan.max_sentences == 2
-    assert result.response.text == "I keep watch here. Nobody thanks me for it."  # whole leading sentences, within the plan's limit
+    assert result.response.text == "Work is tiring."  # provider repair, never a truncated candidate
     assert "too_many_sentences" in result.violations
 
 
@@ -375,3 +375,14 @@ def test_prompt_budget_failure_retains_construction_time(scenario_data, monkeypa
     assert result.error_code == "prompt_budget" and result.model_calls == 0
     assert result.stage_ms["prompt"] == pytest.approx(50)
     assert result.stage_ms["generation"] == 0
+
+
+def test_length_failure_cannot_remove_a_permission_condition(scenario_data):
+    text = "You may take the ledger from my desk. The cover is red. But only if the steward first gives you written permission."
+    long = json.dumps({"mode": "speech", "text": text, "cue": None, "evidence_ids": []})
+    provider = ScriptedProvider(long, VALID)
+    result = asyncio.run(PreviewRunner(provider).run(generating(scenario_data)))
+    assert result.model_calls == 2
+    assert result.status == "repair_success"
+    assert result.response.text == "Work is tiring."
+    assert "too_many_sentences" in result.violations

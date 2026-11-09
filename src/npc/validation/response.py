@@ -25,32 +25,6 @@ def _boundary_topic_words(text):
     return {word[:-1] if len(word) > 3 and word.endswith("s") else word for word in words}
 
 
-LENGTH_CODES = frozenset({"too_many_words", "too_many_sentences", "too_many_characters"})
-_WORD = r"\b\w+(?:['\u2019\-]\w+)*\b"
-
-
-def shorten_text(text, max_words, max_sentences):
-    """Keep whole leading sentences that fit the limits. Falls back to a clause or word cut, never to nothing."""
-    sentences = [part.strip() for part in re.findall(r"[^.!?]+[.!?]*", text) if part.strip()]
-    if not sentences or max_words < 1 or max_sentences < 1:
-        return None
-    keep, words = [], 0
-    for sentence in sentences:
-        count = len(re.findall(_WORD, sentence, flags=re.UNICODE))
-        if len(keep) >= max_sentences or words + count > max_words:
-            break
-        keep.append(sentence)
-        words += count
-    if keep:
-        return " ".join(keep)
-    cut = " ".join(sentences[0].split()[:max_words])
-    boundary = max(cut.rfind(","), cut.rfind(";"), cut.rfind(" —"), cut.rfind(" -"))
-    if boundary > len(cut) // 2:
-        cut = cut[:boundary]
-    cut = cut.rstrip(" ,;:-—.!?")
-    return cut + "." if cut else None
-
-
 REPLY_SIMILARITY = 0.7  # token Jaccard (all words) against a recent NPC reply
 OPENING_WORDS = 6  # shared opening words that count as a repeated reply
 MIN_COMPARE_WORDS = 6  # shorter replies (refusals, acknowledgements) skip the similarity check

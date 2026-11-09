@@ -17,7 +17,7 @@ def test_ini_contents_and_connector_lines():
     assert lines.startswith("[Console]\nLaunchConsole=1\nConsoleExe=") and lines.rstrip().endswith("AnimaConsole.exe")
 
 
-@pytest.mark.parametrize("path", ["D:/steam/steamapps/common/Skyrim", "D:/MO2/mods/Anima", "d:\mo2"])
+@pytest.mark.parametrize("path", ["D:/steam/steamapps/common/Skyrim", "D:/MO2/mods/Anima", r"d:\mo2"])
 def test_protected_folders_are_refused(path):
     with pytest.raises(ValueError):
         install.check_target(Path(path))
@@ -38,3 +38,13 @@ def test_real_run_needs_exe_then_writes_ini(tmp_path, monkeypatch):
     (tmp_path / "AnimaConsole.exe").write_bytes(b"MZ")
     install.main()
     assert "[Console]" in (tmp_path / "AnimaConsole.ini").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("path", ["D:/steam-backup", "D:/mo2-notes", "E:/project/output"])
+def test_similarly_named_unprotected_folders_are_allowed(path):
+    install.check_target(Path(path))
+
+
+def test_windows_parent_segments_cannot_bypass_protected_target():
+    with pytest.raises(ValueError):
+        install.check_target(Path("D:/other/../steam/Skyrim"))

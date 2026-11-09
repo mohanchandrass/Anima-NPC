@@ -4,6 +4,7 @@ Never touches the game or mod-manager folders: only writes the INI in --target-d
 """
 
 import argparse
+import ntpath
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,8 +22,11 @@ def connector_lines(exe: Path) -> str:
 
 
 def check_target(target: Path):
-    normalised = str(target.resolve()).replace("\\", "/").lower()
-    if normalised.startswith(PROTECTED):
+    # Inspect the original spelling as well as the host-resolved path. On Linux
+    # Path.resolve treats a Windows drive path as a relative POSIX filename.
+    paths = (str(target), str(target.resolve()))
+    normalised = [ntpath.normpath(path).replace("\\", "/").lower() for path in paths]
+    if any(path == prefix or path.startswith(prefix + "/") for path in normalised for prefix in PROTECTED):
         raise ValueError(f"Refusing to write inside {target}: copy the INI by hand into the game/mod folder")
 
 
@@ -32,9 +36,9 @@ def main():
     parser.add_argument("--python", type=Path, default=ROOT / ".venv/Scripts/python.exe")
     parser.add_argument("--dry-run", action="store_true", help="print what would be written")
     args = parser.parse_args()
-    target = args.target_dir.resolve()
     try:
-        check_target(target)
+        check_target(args.target_dir)
+        target = args.target_dir.resolve()
         ini = console_ini(args.python.resolve(), ROOT, ARGUMENTS)
         exe = target / "AnimaConsole.exe"
         if args.dry_run:

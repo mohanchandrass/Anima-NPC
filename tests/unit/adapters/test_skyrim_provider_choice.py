@@ -37,3 +37,14 @@ def test_reads_the_dotenv_when_no_env_is_given(tmp_path, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     (tmp_path / ".env").write_text("NPC_LLM_API_KEY=sk-or-test\nNPC_LLM_MODEL=vendor/model:free\n", encoding="utf-8")
     assert choose_profile("configs/providers/auto.yaml", root=tmp_path).endswith("openrouter.yaml")
+
+
+@pytest.mark.parametrize("model,expected", [
+    ("nvidia/nemotron-example:free", "openrouter.yaml"),
+    ("google/gemini-example", "openrouter.yaml"),
+    ("gemini-example", "gemini.yaml"),
+    ("models/gemini-example", "gemini.yaml"),
+])
+def test_explicit_model_wins_when_both_provider_keys_exist(model, expected):
+    env = {"GEMINI_API_KEY": "nonsecret-gemini", "OPENROUTER_API_KEY": "nonsecret-router", "NPC_LLM_MODEL": model}
+    assert choose_profile("configs/providers/auto.yaml", env).endswith(expected)

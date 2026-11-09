@@ -924,7 +924,9 @@ def test_social_memory_key_survives_a_new_game_epoch_by_default(tmp_path):
                 await bridge.close()
             keys.append(run_keys)
         assert keys[0][0] == keys[0][1] and keys[1][0] != keys[1][1]
-def test_slow_cv_does_not_block_turn_and_expired_result_is_discarded(tmp_path):
+def test_slow_cv_does_not_block_turn_and_expired_result_is_discarded(tmp_path, monkeypatch):
+    events = []
+    monkeypatch.setattr("npc.adapters.skyrim.bridge.log_event", lambda kind, **fields: events.append((kind, fields)))
     from npc.vision import VisualContext
     from npc.runtime.preview import PreviewRunner
     from npc.generation.provider import OfflineProvider
@@ -952,6 +954,8 @@ def test_slow_cv_does_not_block_turn_and_expired_result_is_discarded(tmp_path):
             await bridge.session.visual_task
             assert bridge.visual_reference(bridge.session) is None
             assert bridge.session.visual_status == "stale"
+            results = [fields for kind, fields in events if kind == "CV_RESULT"]
+            assert len(results) == 1 and results[0]["status"] == "stale_discarded"
         finally:
             await bridge.close()
     asyncio.run(run())

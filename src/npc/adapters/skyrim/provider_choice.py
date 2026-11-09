@@ -18,10 +18,15 @@ AUTO = "auto"
 def looks_like_openrouter(env: Mapping[str, str]) -> bool:
     key = (env.get("OPENROUTER_API_KEY") or env.get("NPC_LLM_API_KEY") or "").strip().strip("'\"")
     model = (env.get("NPC_LLM_MODEL") or "").strip().strip("'\"")
-    gemini_key = bool((env.get("GEMINI_API_KEY") or "").strip()) or key.startswith("AIza")
-    if gemini_key:
+    # Model identity wins over leftover credentials for another provider.
+    if model.startswith(("gemini-", "models/gemini")):
         return False
-    return bool(env.get("OPENROUTER_API_KEY")) or key.startswith("sk-or-") or "/" in model or model.endswith(":free")
+    if "/" in model or model.endswith(":free"):
+        return True
+    common_key = (env.get("NPC_LLM_API_KEY") or "").strip().strip("'\"")
+    if common_key.startswith("AIza"):
+        return False
+    return bool((env.get("OPENROUTER_API_KEY") or "").strip()) or key.startswith("sk-or-")
 
 
 def choose_profile(requested: str, env: Mapping[str, str] | None = None, *, root: Path | None = None) -> str:

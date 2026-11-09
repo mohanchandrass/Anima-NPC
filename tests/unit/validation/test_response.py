@@ -87,22 +87,3 @@ def test_unrelated_authored_boundary_cannot_substitute_for_current_topic(scenari
     result = validate_response(reply, situation, plan, CurrentState(dialogue_revision=situation.dialogue_revision, turn_epoch=situation.turn_epoch))
     assert result.accepted is accepted
     assert ("irrelevant_boundary" in result.violations) is (not accepted)
-
-
-from npc.validation.response import shorten_text  # noqa: E402
-
-
-def test_shorten_keeps_whole_leading_sentences_within_both_limits():
-    assert shorten_text("I am the guard. I watch the gate. Nothing else to say.", 40, 2) == "I am the guard. I watch the gate."
-    assert shorten_text("One two three. Four five six seven.", 5, 3) == "One two three."
-
-
-def test_shorten_cuts_one_long_sentence_at_a_clause_not_mid_word():
-    out = shorten_text("I keep watch over the gate every night, though nobody thanks me for it at all.", 8, 1)
-    assert out == "I keep watch over the gate every night."
-    assert len(out.split()) <= 8
-
-
-def test_shorten_falls_back_to_a_word_cut_and_never_returns_empty_text():
-    assert shorten_text("Alpha beta gamma delta epsilon zeta eta theta iota", 4, 1) == "Alpha beta gamma delta."
-    assert shorten_text("", 5, 1) is None and shorten_text("Hello there.", 0, 1) is None
